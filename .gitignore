@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Node / Prisma
+node_modules/
+.prisma/
+
+# Docker
+*.pid
+
+# Test / Coverage
+.coverage
+htmlcov/
+
+# Build
+dist/
+build/
