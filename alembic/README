@@ -1,1 +1,2 @@
 Generic single-database configuration.
+env.py는 .env 파일이 아닙니다.
