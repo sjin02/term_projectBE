@@ -1,19 +1,8 @@
 from fastapi import FastAPI
-from app.db.session import init_db
+from app.core.config import settings
+from app.api.routes import all_routers
 
-app = FastAPI(
-    title="Movie API",
-    version="0.1.0"
-)
+app = FastAPI(title="Movie API", version=settings.APP_VERSION)
 
-@app.on_event("startup")
-def on_startup():
-    init_db()
-
-@app.get("/health")
-def health_check():
-    return {
-        "status": "ok",
-        "version": "0.1.0",
-        "buildTime": "local"
-    }
+for r in all_routers:
+    app.include_router(r)

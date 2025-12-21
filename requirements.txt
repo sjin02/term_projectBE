@@ -10,3 +10,5 @@ httpx
 pytest
 firebase-admin
 pydantic-settings
+alembic
+email-validator
