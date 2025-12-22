@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 from typing import Optional, List
 
@@ -6,7 +6,7 @@ from sqlmodel import SQLModel, Field, Relationship
 
 
 # ======================
-# Enums
+# Enums (로직용)
 # ======================
 
 class UserRole(str, Enum):
@@ -33,8 +33,8 @@ class User(SQLModel, table=True):
     password_hash: str
     nickname: str
 
-    role: UserRole = Field(default=UserRole.USER)
-    status: UserStatus = Field(default=UserStatus.ACTIVE)
+    role: str = Field(default=UserRole.USER.value)
+    status: str = Field(default=UserStatus.ACTIVE.value)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -52,14 +52,8 @@ class User(SQLModel, table=True):
 class ContentGenreLink(SQLModel, table=True):
     __tablename__ = "content_genres"
 
-    content_id: int = Field(
-        foreign_key="contents.id",
-        primary_key=True,
-    )
-    genre_id: int = Field(
-        foreign_key="genres.id",
-        primary_key=True,
-    )
+    content_id: int = Field(foreign_key="contents.id", primary_key=True)
+    genre_id: int = Field(foreign_key="genres.id", primary_key=True)
 
 
 # ======================
@@ -70,7 +64,8 @@ class Genre(SQLModel, table=True):
     __tablename__ = "genres"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True, unique=True)
+    tmdb_genre_id: int = Field(unique=True, index=True)
+    name: str
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     deleted_at: Optional[datetime] = Field(default=None)
@@ -82,7 +77,7 @@ class Genre(SQLModel, table=True):
 
 
 # ======================
-# Content
+# Content (Movie only)
 # ======================
 
 class Content(SQLModel, table=True):
@@ -90,11 +85,11 @@ class Content(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
+    tmdb_id: int = Field(index=True, unique=True)
     title: str = Field(index=True)
-    description: Optional[str] = None
 
-    release_year: int
-    runtime_minutes: int
+    release_date: Optional[date] = None
+    runtime_minutes: Optional[int] = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -106,87 +101,3 @@ class Content(SQLModel, table=True):
     )
     reviews: List["Review"] = Relationship(back_populates="content")
     bookmarks: List["Bookmark"] = Relationship(back_populates="content")
-
-
-# ======================
-# Review
-# ======================
-
-class Review(SQLModel, table=True):
-    __tablename__ = "reviews"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-
-    user_id: int = Field(foreign_key="users.id")
-    content_id: int = Field(foreign_key="contents.id")
-
-    rating: int = Field(ge=1, le=5)
-    comment: str
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    user: User = Relationship(back_populates="reviews")
-    content: Content = Relationship(back_populates="reviews")
-    likes: List["ReviewLike"] = Relationship(back_populates="review")
-
-
-# ======================
-# Review Like
-# ======================
-
-class ReviewLike(SQLModel, table=True):
-    __tablename__ = "review_likes"
-
-    user_id: int = Field(
-        foreign_key="users.id",
-        primary_key=True,
-    )
-    review_id: int = Field(
-        foreign_key="reviews.id",
-        primary_key=True,
-    )
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    review: Review = Relationship(back_populates="likes")
-
-
-# ======================
-# Bookmark
-# ======================
-
-class Bookmark(SQLModel, table=True):
-    __tablename__ = "bookmarks"
-
-    user_id: int = Field(
-        foreign_key="users.id",
-        primary_key=True,
-    )
-    content_id: int = Field(
-        foreign_key="contents.id",
-        primary_key=True,
-    )
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    user: User = Relationship(back_populates="bookmarks")
-    content: Content = Relationship(back_populates="bookmarks")
-
-
-# ======================
-# Watch History
-# ======================
-
-class WatchHistory(SQLModel, table=True):
-    __tablename__ = "watch_histories"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-
-    user_id: int = Field(foreign_key="users.id")
-    content_id: int = Field(foreign_key="contents.id")
-
-    watched_minutes: int
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    user: User = Relationship(back_populates="watch_histories")
