@@ -1,110 +1,192 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
+from datetime import datetime
+from math import ceil
 
-from database import get_db
-import models, schemas
+from fastapi import APIRouter, Depends, Query, Request
+from sqlmodel import Session, select, func
 
-router = APIRouter(
-    prefix="/api/v1", 
-    tags=["Genres"]
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import http_error
+from app.core.responses import STANDARD_ERROR_RESPONSES, success_response
+from app.db.models import Genre
+from app.deps.auth import require_admin
+from app.deps.db import get_db
+from app.schemas.genres import (
+    GenreCreateRequest,
+    GenreListResponse,
+    GenreResponse,
+    GenreUpdateRequest,
 )
 
-# 관리자 권한 체크
-def verify_admin(user_id: int = 999): 
-    if user_id != 999:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="관리자 권한이 필요합니다."
-        )
-    return user_id
+router = APIRouter(
+    prefix="/api/v1/genres",
+    tags=["genres"],
+    responses=STANDARD_ERROR_RESPONSES,
+)
 
-# 1. 장르 목록 조회 (200 OK, 500 Internal Server Error)
-@router.get("/contents/genres", response_model=List[schemas.GenreResponse], summary="장르 목록 조회")
-def get_genres(
+
+def _sort_clause(sort: str):
+    allowed = {
+        "createdAt": Genre.created_at,
+        "name": Genre.name,
+    }
+    try:
+        field, direction = sort.split(",")
+    except ValueError:
+        raise http_error(
+            status_code=400,
+            code=ErrorCode.INVALID_QUERY_PARAM,
+            message="sort 형식은 field,DESC|ASC 이어야 합니다.",
+        )
+    if field not in allowed or direction.upper() not in ("ASC", "DESC"):
+        raise http_error(
+            status_code=400,
+            code=ErrorCode.INVALID_QUERY_PARAM,
+            message="지원하지 않는 정렬 필드 혹은 방향입니다.",
+            details={"sort": sort},
+        )
+    column = allowed[field]
+    return column.desc() if direction.upper() == "DESC" else column.asc()
+
+
+@router.get("")
+def list_genres(
+    request: Request,
+    page: int = Query(0, ge=0),
+    size: int = Query(20, ge=1, le=50),
+    sort: str = Query("createdAt,DESC"),
+    keyword: str | None = Query(None, description="장르명 검색어"),
+    created_from: datetime | None = Query(None, alias="createdFrom"),
+    created_to: datetime | None = Query(None, alias="createdTo"),
     db: Session = Depends(get_db),
-    simulate_error: bool = False # 과제용 에러 트리거 파라미터
 ):
-    # [500 Error 시뮬레이션]
-    # 과제용: 파라미터로 simulate_error=True가 오면 서버 내부 오류 발생
-    if simulate_error:
-        # FastAPI는 Python 코드 에러를 자동으로 500으로 처리하지만,
-        # 명시적으로 보여주기 위해 500 예외 발생
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="DB 연결에 실패했습니다. (테스트용)"
-        )
+    stmt = select(Genre).where(Genre.deleted_at.is_(None))
+    if keyword:
+        stmt = stmt.where(Genre.name.ilike(f"%{keyword}%"))
+    if created_from:
+        stmt = stmt.where(Genre.created_at >= created_from)
+    if created_to:
+        stmt = stmt.where(Genre.created_at <= created_to)
+    stmt = stmt.order_by(_sort_clause(sort))
 
-    return db.query(models.Genre).filter(models.Genre.is_active == True).all()
+    total = db.exec(select(func.count()).select_from(stmt.subquery())).one()
+    items = db.exec(stmt.offset(page * size).limit(size)).all()
 
-# 2. 장르 생성 (201 Created, 400 Bad Request, 409 Conflict, 503 Service Unavailable)
-@router.post("/genres", status_code=status.HTTP_201_CREATED, response_model=schemas.GenreResponse)
+    payload = GenreListResponse(
+        content=[GenreResponse.model_validate(item) for item in items],
+        page=page,
+        size=size,
+        totalElements=int(total),
+        totalPages=ceil(int(total) / size) if size else 0,
+        sort=sort,
+    )
+    return success_response(
+        request,
+        message="Genres fetched",
+        data=payload.model_dump(),
+    )
+
+
+@router.post("", status_code=201, dependencies=[Depends(require_admin)])
 def create_genre(
-    genre_in: schemas.GenreCreate, 
+    request: Request,
+    body: GenreCreateRequest,
     db: Session = Depends(get_db),
-    admin_id: int = Depends(verify_admin)
 ):
-    # [503 Error 시뮬레이션]
-    # 시나리오: 장르명이 'maintenance'면 점검 중이라고 응답
-    if genre_in.name == "maintenance":
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="현재 시스템 점검 중입니다."
+    exists = db.exec(
+        select(Genre).where(
+            Genre.name == body.name,
+            Genre.deleted_at.is_(None),
+        )
+    ).first()
+    if exists:
+        raise http_error(
+            status_code=409,
+            code=ErrorCode.DUPLICATE_RESOURCE,
+            message="이미 존재하는 장르입니다.",
+            details={"name": body.name},
         )
 
-    # [400 Bad Request]
-    # 시나리오: 장르명이 너무 짧으면 잘못된 요청 처리
-    if len(genre_in.name) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="장르명은 2글자 이상이어야 합니다."
-        )
-
-    # [409 Conflict]
-    # 시나리오: 이미 있는 장르명
-    existing = db.query(models.Genre).filter(models.Genre.name == genre_in.name).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="이미 존재하는 장르입니다."
-        )
-
-    new_genre = models.Genre(name=genre_in.name)
-    db.add(new_genre)
-    db.commit()
-    db.refresh(new_genre)
-    return new_genre
-
-# 3. 장르 수정 (200 OK)
-@router.patch("/genres/{genre_id}", response_model=schemas.GenreResponse)
-def update_genre(
-    genre_id: int,
-    genre_in: schemas.GenreUpdate,
-    db: Session = Depends(get_db),
-    admin_id: int = Depends(verify_admin)
-):
-    genre = db.query(models.Genre).filter(models.Genre.id == genre_id).first()
-    if not genre:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Genre not found")
-    
-    if genre_in.name:
-        genre.name = genre_in.name
-        
+    genre = Genre(name=body.name)
+    db.add(genre)
     db.commit()
     db.refresh(genre)
-    return genre
 
-# 4. 장르 삭제 (204 No Content)
-@router.delete("/genres/{genre_id}", status_code=status.HTTP_204_NO_CONTENT)
+    return success_response(
+        request,
+        status_code=201,
+        message="Genre created",
+        data=GenreResponse.model_validate(genre).model_dump(),
+    )
+
+
+@router.patch(
+    "/{genre_id}",
+    dependencies=[Depends(require_admin)],
+)
+def update_genre(
+    request: Request,
+    genre_id: int,
+    body: GenreUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    genre = db.get(Genre, genre_id)
+    if not genre or genre.deleted_at is not None:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Genre not found",
+            details={"genreId": genre_id},
+        )
+    if body.name:
+        dup = db.exec(
+            select(Genre).where(
+                Genre.name == body.name,
+                Genre.id != genre_id,
+                Genre.deleted_at.is_(None),
+            )
+        ).first()
+        if dup:
+            raise http_error(
+                status_code=409,
+                code=ErrorCode.DUPLICATE_RESOURCE,
+                message="이미 존재하는 장르명입니다.",
+                details={"name": body.name},
+            )
+        genre.name = body.name
+
+    db.add(genre)
+    db.commit()
+    db.refresh(genre)
+    return success_response(
+        request,
+        message="Genre updated",
+        data=GenreResponse.model_validate(genre).model_dump(),
+    )
+
+
+@router.delete(
+    "/{genre_id}",
+    dependencies=[Depends(require_admin)],
+)
 def delete_genre(
+    request: Request,
     genre_id: int,
     db: Session = Depends(get_db),
-    admin_id: int = Depends(verify_admin)
 ):
-    genre = db.query(models.Genre).filter(models.Genre.id == genre_id).first()
-    if not genre:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Genre not found")
-    
-    genre.is_active = False 
+    genre = db.get(Genre, genre_id)
+    if not genre or genre.deleted_at is not None:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Genre not found",
+            details={"genreId": genre_id},
+        )
+
+    genre.deleted_at = datetime.utcnow()
+    db.add(genre)
     db.commit()
-    return None
+    return success_response(
+        request,
+        message="Genre deleted",
+        data={"genreId": genre_id},
+    )

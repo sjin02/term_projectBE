@@ -1,65 +1,180 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from database import get_db
-import models, schemas
+from datetime import datetime
+from math import ceil
 
-router = APIRouter(
-    prefix="/api/v1/contents",
-    tags=["Bookmarks"]
+from fastapi import APIRouter, Depends, Query, Request
+from sqlmodel import Session, select, func
+
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import http_error
+from app.core.responses import STANDARD_ERROR_RESPONSES, success_response
+from app.db.models import Bookmark, Content
+from app.deps.auth import get_current_user
+from app.deps.db import get_db
+from app.schemas.bookmarks import (
+    BookmarkCreateRequest,
+    BookmarkItem,
+    BookmarkListResponse,
 )
 
-def get_current_user_id():
-    return 1 
+router = APIRouter(
+    prefix="/api/v1/bookmarks",
+    tags=["bookmarks"],
+    responses=STANDARD_ERROR_RESPONSES,
+)
 
-# 1. 작품 찜하기 추가 (201 Created, 409 Conflict, 429 Too Many Requests)
-@router.post("/{content_id}/bookmarks", status_code=status.HTTP_201_CREATED, summary="작품 찜하기")
+
+def _sort_clause(sort: str):
+    allowed = {
+        "createdAt": Bookmark.created_at,
+        "title": Content.title,
+    }
+    try:
+        field, direction = sort.split(",")
+    except ValueError:
+        raise http_error(
+            status_code=400,
+            code=ErrorCode.INVALID_QUERY_PARAM,
+            message="sort 형식은 field,DESC|ASC 이어야 합니다.",
+        )
+
+    if field not in allowed or direction.upper() not in ("ASC", "DESC"):
+        raise http_error(
+            status_code=400,
+            code=ErrorCode.INVALID_QUERY_PARAM,
+            message="지원하지 않는 정렬 필드 혹은 방향입니다.",
+            details={"sort": sort},
+        )
+
+    column = allowed[field]
+    return column.desc() if direction.upper() == "DESC" else column.asc()
+
+
+@router.post("", status_code=201)
 def create_bookmark(
-    content_id: int,
+    request: Request,
+    body: BookmarkCreateRequest,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user=Depends(get_current_user),
 ):
-    # [429 Error 시뮬레이션]
-    # 과제용: content_id가 9999면 도배로 간주하고 429 발생
-    if content_id == 9999:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="찜하기 요청이 너무 많습니다. 잠시 후 시도해주세요."
+    content = db.get(Content, body.content_id)
+    if not content or content.deleted_at is not None:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="콘텐츠를 찾을 수 없습니다.",
         )
 
-    # 1. 중복 체크 (409 Conflict)
-    existing = db.query(models.Bookmark).filter(
-        models.Bookmark.user_id == user_id,
-        models.Bookmark.content_id == content_id
+    existing = db.exec(
+        select(Bookmark).where(
+            Bookmark.user_id == user.id,
+            Bookmark.content_id == body.content_id,
+        )
     ).first()
-    
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, 
-            detail="이미 찜한 작품입니다."
+        raise http_error(
+            status_code=409,
+            code=ErrorCode.DUPLICATE_RESOURCE,
+            message="이미 찜한 콘텐츠입니다.",
+            details={"contentId": body.content_id},
         )
 
-    # 2. 저장
-    new_bookmark = models.Bookmark(user_id=user_id, content_id=content_id)
-    db.add(new_bookmark)
+    bookmark = Bookmark(user_id=user.id, content_id=body.content_id)
+    db.add(bookmark)
     db.commit()
-    return {"message": "Bookmarked successfully"}
+    db.refresh(bookmark)
 
-# 2. 작품 찜하기 취소 (204 No Content, 404 Not Found)
-@router.delete("/{content_id}/bookmarks", status_code=status.HTTP_204_NO_CONTENT, summary="찜하기 취소")
+    item = BookmarkItem(
+        content_id=bookmark.content_id,
+        title=content.title,
+        created_at=bookmark.created_at,
+    )
+    return success_response(
+        request,
+        status_code=201,
+        message="Bookmarked successfully",
+        data=item.model_dump(),
+    )
+
+
+@router.get("")
+def list_bookmarks(
+    request: Request,
+    page: int = Query(0, ge=0),
+    size: int = Query(20, ge=1, le=50),
+    sort: str = Query("createdAt,DESC"),
+    keyword: str | None = Query(None, description="콘텐츠 제목 검색어"),
+    date_from: datetime | None = Query(None, alias="dateFrom"),
+    date_to: datetime | None = Query(None, alias="dateTo"),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    stmt = (
+        select(Bookmark, Content)
+        .join(Content, Content.id == Bookmark.content_id)
+        .where(Bookmark.user_id == user.id)
+    )
+
+    if keyword:
+        stmt = stmt.where(Content.title.ilike(f"%{keyword}%"))
+    if date_from:
+        stmt = stmt.where(Bookmark.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(Bookmark.created_at <= date_to)
+
+    stmt = stmt.order_by(_sort_clause(sort))
+
+    total = db.exec(select(func.count()).select_from(stmt.subquery())).one()
+    rows = db.exec(stmt.offset(page * size).limit(size)).all()
+
+    items = [
+        BookmarkItem(
+            content_id=bookmark.content_id,
+            title=content.title,
+            created_at=bookmark.created_at,
+        )
+        for bookmark, content in rows
+    ]
+
+    payload = BookmarkListResponse(
+        content=items,
+        page=page,
+        size=size,
+        totalElements=int(total),
+        totalPages=ceil(int(total) / size) if size else 0,
+        sort=sort,
+    )
+    return success_response(
+        request,
+        message="Bookmarks fetched",
+        data=payload.model_dump(),
+    )
+
+
+@router.delete("/{content_id}")
 def delete_bookmark(
+    request: Request,
     content_id: int,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id)
+    user=Depends(get_current_user),
 ):
-    bookmark = db.query(models.Bookmark).filter(
-        models.Bookmark.user_id == user_id,
-        models.Bookmark.content_id == content_id
+    bookmark = db.exec(
+        select(Bookmark).where(
+            Bookmark.user_id == user.id,
+            Bookmark.content_id == content_id,
+        )
     ).first()
-    
-    # [404] 찜 내역 없음
     if not bookmark:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
-        
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Bookmark not found",
+            details={"contentId": content_id},
+        )
+
     db.delete(bookmark)
     db.commit()
-    return None
+    return success_response(
+        request,
+        message="Bookmark removed",
+        data={"contentId": content_id},
+    )

@@ -1,139 +1,353 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from typing import List
+from datetime import datetime
+from math import ceil
 
-# 기존 import 경로 유지
-from app.db.session import get_session
-from app.models import Review
-from app.schemas import ReviewResponse, ReviewCreate, ReviewUpdate
+from fastapi import APIRouter, Depends, Query, Request
+from sqlmodel import Session, select, func
+
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import http_error
+from app.core.responses import STANDARD_ERROR_RESPONSES, success_response
+from app.db.models import Content, Review, ReviewLike
+from app.deps.auth import get_current_user
+from app.deps.db import get_db
+from app.schemas.reviews import (
+    ReviewCreate,
+    ReviewListResponse,
+    ReviewResponse,
+    ReviewUpdate,
+)
 
 router = APIRouter(
     prefix="/api/v1",
-    tags=["reviews"]
+    tags=["reviews"],
+    responses=STANDARD_ERROR_RESPONSES,
 )
 
-# [수정] 401 테스트를 위해 user_id가 0이면 에러 발생 로직 추가
-def get_current_user_id(user_id: int = 1):
-    # 시나리오: 헤더에 토큰이 없거나 만료된 경우 (ID가 0으로 들어온다고 가정)
-    if user_id == 0:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="로그인이 필요합니다."
+
+def _sort_clause(sort: str):
+    allowed = {
+        "createdAt": Review.created_at,
+        "rating": Review.rating,
+    }
+    try:
+        field, direction = sort.split(",")
+    except ValueError:
+        raise http_error(
+            status_code=400,
+            code=ErrorCode.INVALID_QUERY_PARAM,
+            message="sort 형식은 field,DESC|ASC 이어야 합니다.",
         )
-    return user_id
+    if field not in allowed or direction.upper() not in ("ASC", "DESC"):
+        raise http_error(
+            status_code=400,
+            code=ErrorCode.INVALID_QUERY_PARAM,
+            message="지원하지 않는 정렬 필드 혹은 방향입니다.",
+            details={"sort": sort},
+        )
+    column = allowed[field]
+    return column.desc() if direction.upper() == "DESC" else column.asc()
 
-# 1. 요즘 뜨는 리뷰 (200 OK)
-@router.get("/reviews/popular", response_model=List[ReviewResponse], status_code=status.HTTP_200_OK)
-def get_popular_reviews(db: Session = Depends(get_session)):
-    return db.query(Review).order_by(desc(Review.like_count)).limit(10).all()
 
-# 2. 리뷰 작성 (201 Created)
-@router.post("/contents/{content_id}/reviews", status_code=status.HTTP_201_CREATED)
-def create_review(
-    content_id: int,
-    review_in: ReviewCreate,
-    db: Session = Depends(get_session),
-    user_id: int = Depends(get_current_user_id)
-):
-    new_review = Review(
-        content_id=content_id,
-        user_id=user_id,
-        rating=review_in.rating,
-        comment=review_in.comment
+def _review_to_response(review: Review, like_count: int) -> ReviewResponse:
+    return ReviewResponse(
+        **review.model_dump(),
+        like_count=like_count,
     )
-    db.add(new_review)
-    db.commit()
-    db.refresh(new_review)
-    return new_review
 
-# 3. 작품별 리뷰 목록 (200 OK)
-@router.get("/contents/{content_id}/reviews", response_model=List[ReviewResponse], status_code=status.HTTP_200_OK)
-def get_reviews_by_content(
+
+def _like_count_subquery():
+    return (
+        select(
+            Review.id,
+            func.count(ReviewLike.user_id).label("like_count"),
+        )
+        .join(ReviewLike, ReviewLike.review_id == Review.id, isouter=True)
+        .group_by(Review.id)
+        .subquery()
+    )
+
+
+@router.get("/reviews/popular")
+def get_popular_reviews(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    like_counts = _like_count_subquery()
+    stmt = (
+        select(Review, like_counts.c.like_count)
+        .join(like_counts, like_counts.c.id == Review.id)
+        .order_by(like_counts.c.like_count.desc(), Review.created_at.desc())
+        .limit(10)
+    )
+    rows = db.exec(stmt).all()
+    responses = [
+        _review_to_response(review, like_count or 0) for review, like_count in rows
+    ]
+    return success_response(
+        request,
+        message="Popular reviews fetched",
+        data=[r.model_dump() for r in responses],
+    )
+
+
+@router.post("/contents/{content_id}/reviews", status_code=201)
+def create_review(
+    request: Request,
     content_id: int,
-    sort: str = Query("latest"),
-    db: Session = Depends(get_session)
+    body: ReviewCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
-    query = db.query(Review).filter(Review.content_id == content_id)
-    if sort == "popular":
-        query = query.order_by(desc(Review.like_count))
-    else:
-        query = query.order_by(desc(Review.created_at))
-    return query.all()
+    content = db.get(Content, content_id)
+    if not content or content.deleted_at is not None:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Content not found",
+            details={"contentId": content_id},
+        )
 
-# 4. 리뷰 수정 (403 Forbidden, 404 Not Found)
-@router.put("/api/v1/reviews/{review_id}", response_model=ReviewResponse)
-def update_review(
-    review_id: int,
-    review_update: ReviewUpdate,
-    db: Session = Depends(get_session),
-    user_id: int = Depends(get_current_user_id)
-):
-    review = db.query(Review).filter(Review.id == review_id).first()
-    
-    # [404] 리소스 없음
-    if not review:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
-    
-    # [403] 권한 없음 (내 글 아님)
-    if review.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this review")
-    
-    if review_update.rating:
-        review.rating = review_update.rating
-    if review_update.comment:
-        review.comment = review_update.comment
-        
+    review = Review(
+        content_id=content_id,
+        user_id=user.id,
+        rating=body.rating,
+        comment=body.comment,
+    )
+    db.add(review)
     db.commit()
     db.refresh(review)
-    return review
 
-# 5. 리뷰 삭제 (204 No Content)
-@router.delete("/api/v1/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_review(
-    review_id: int,
-    db: Session = Depends(get_session),
-    user_id: int = Depends(get_current_user_id)
+    response = _review_to_response(review, like_count=0)
+    return success_response(
+        request,
+        status_code=201,
+        message="Review created",
+        data=response.model_dump(),
+    )
+
+
+@router.get("/contents/{content_id}/reviews")
+def get_reviews_by_content(
+    request: Request,
+    content_id: int,
+    sort: str = Query("createdAt,DESC"),
+    page: int = Query(0, ge=0),
+    size: int = Query(20, ge=1, le=50),
+    keyword: str | None = Query(None, description="리뷰 내용 검색"),
+    rating_min: int | None = Query(None, ge=1, le=5, alias="ratingMin"),
+    rating_max: int | None = Query(None, ge=1, le=5, alias="ratingMax"),
+    date_from: datetime | None = Query(None, alias="dateFrom"),
+    date_to: datetime | None = Query(None, alias="dateTo"),
+    db: Session = Depends(get_db),
 ):
-    review = db.query(Review).filter(Review.id == review_id).first()
-    if not review:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
+    content = db.get(Content, content_id)
+    if not content or content.deleted_at is not None:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Content not found",
+            details={"contentId": content_id},
+        )
 
-    if review.user_id != user_id and user_id != 999:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-        
+    like_counts = _like_count_subquery()
+    stmt = (
+        select(Review, like_counts.c.like_count)
+        .join(like_counts, like_counts.c.id == Review.id)
+        .where(Review.content_id == content_id)
+    )
+
+    if keyword:
+        stmt = stmt.where(Review.comment.ilike(f"%{keyword}%"))
+    if rating_min is not None:
+        stmt = stmt.where(Review.rating >= rating_min)
+    if rating_max is not None:
+        stmt = stmt.where(Review.rating <= rating_max)
+    if date_from:
+        stmt = stmt.where(Review.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(Review.created_at <= date_to)
+
+    stmt = stmt.order_by(_sort_clause(sort))
+
+    total = db.exec(select(func.count()).select_from(stmt.subquery())).one()
+    rows = db.exec(stmt.offset(page * size).limit(size)).all()
+
+    responses = [
+        _review_to_response(review, like_count or 0) for review, like_count in rows
+    ]
+    payload = ReviewListResponse(
+        content=responses,
+        page=page,
+        size=size,
+        totalElements=int(total),
+        totalPages=ceil(int(total) / size) if size else 0,
+        sort=sort,
+    )
+    return success_response(
+        request,
+        message="Reviews fetched",
+        data=payload.model_dump(),
+    )
+
+
+@router.put("/reviews/{review_id}")
+def update_review(
+    request: Request,
+    review_id: int,
+    body: ReviewUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    like_counts = _like_count_subquery()
+    stmt = (
+        select(Review, like_counts.c.like_count)
+        .join(like_counts, like_counts.c.id == Review.id)
+        .where(Review.id == review_id)
+    )
+    row = db.exec(stmt).first()
+    if not row:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Review not found",
+            details={"reviewId": review_id},
+        )
+
+    review, like_count = row
+    if review.user_id != user.id:
+        raise http_error(
+            status_code=403,
+            code=ErrorCode.FORBIDDEN,
+            message="수정 권한이 없습니다.",
+        )
+
+    if body.rating is not None:
+        review.rating = body.rating
+    if body.comment is not None:
+        review.comment = body.comment
+
+    review.updated_at = datetime.utcnow()
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+
+    response = _review_to_response(review, like_count or 0)
+    return success_response(
+        request,
+        message="Review updated",
+        data=response.model_dump(),
+    )
+
+
+@router.delete("/reviews/{review_id}")
+def delete_review(
+    request: Request,
+    review_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    review = db.get(Review, review_id)
+    if not review:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Review not found",
+            details={"reviewId": review_id},
+        )
+
+    if review.user_id != user.id:
+        raise http_error(
+            status_code=403,
+            code=ErrorCode.FORBIDDEN,
+            message="삭제 권한이 없습니다.",
+        )
+
     db.delete(review)
     db.commit()
-    return None
+    return success_response(
+        request,
+        message="Review deleted",
+        data={"reviewId": review_id},
+    )
 
-# 6. 리뷰 좋아요 (200 OK)
-@router.post("/api/v1/reviews/{review_id}/likes")
+
+@router.post("/reviews/{review_id}/likes", status_code=201)
 def like_review(
+    request: Request,
     review_id: int,
-    db: Session = Depends(get_session),
-    user_id: int = Depends(get_current_user_id)
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
-    review = db.query(Review).filter(Review.id == review_id).first()
+    review = db.get(Review, review_id)
     if not review:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
-    
-    review.like_count += 1
-    db.commit()
-    return {"message": "Review liked", "like_count": review.like_count}
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Review not found",
+            details={"reviewId": review_id},
+        )
 
-# 7. 리뷰 좋아요 취소 (200 OK)
-@router.delete("/api/v1/reviews/{review_id}/likes")
+    existing = db.exec(
+        select(ReviewLike).where(
+            ReviewLike.review_id == review_id,
+            ReviewLike.user_id == user.id,
+        )
+    ).first()
+    if existing:
+        raise http_error(
+            status_code=409,
+            code=ErrorCode.DUPLICATE_RESOURCE,
+            message="이미 좋아요를 눌렀습니다.",
+        )
+
+    like = ReviewLike(review_id=review_id, user_id=user.id)
+    db.add(like)
+    db.commit()
+
+    like_count = db.exec(
+        select(func.count()).select_from(
+            select(ReviewLike).where(ReviewLike.review_id == review_id).subquery()
+        )
+    ).one()
+    return success_response(
+        request,
+        status_code=201,
+        message="Review liked",
+        data={"reviewId": review_id, "likeCount": int(like_count)},
+    )
+
+
+@router.delete("/reviews/{review_id}/likes")
 def unlike_review(
+    request: Request,
     review_id: int,
-    db: Session = Depends(get_session),
-    user_id: int = Depends(get_current_user_id)
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
 ):
-    review = db.query(Review).filter(Review.id == review_id).first()
-    if not review:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
-    
-    if review.like_count > 0:
-        review.like_count -= 1
-        db.commit()
-        
-    return {"message": "Review unliked", "like_count": review.like_count}
+    like = db.exec(
+        select(ReviewLike).where(
+            ReviewLike.review_id == review_id,
+            ReviewLike.user_id == user.id,
+        )
+    ).first()
+    if not like:
+        raise http_error(
+            status_code=404,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="Like not found",
+            details={"reviewId": review_id},
+        )
+
+    db.delete(like)
+    db.commit()
+
+    like_count = db.exec(
+        select(func.count()).select_from(
+            select(ReviewLike).where(ReviewLike.review_id == review_id).subquery()
+        )
+    ).one()
+    return success_response(
+        request,
+        message="Review unliked",
+        data={"reviewId": review_id, "likeCount": int(like_count)},
+    )
