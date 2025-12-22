@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     APP_VERSION: str = "0.1.0"
     BUILD_TIME: str = "local"
+    TMDB_API_KEY: str = ""
+    TMDB_API_BASE: str = "https://api.themoviedb.org/3"
 
     model_config = SettingsConfigDict(
         env_file=".env",

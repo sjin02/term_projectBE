@@ -1,31 +1,19 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, Field
-
-
-class GenreCreateRequest(BaseModel):
-    name: str = Field(..., min_length=2, max_length=50)
-
-
-class GenreUpdateRequest(BaseModel):
-    name: Optional[str] = Field(None, min_length=2, max_length=50)
+from pydantic import BaseModel
 
 
 class GenreResponse(BaseModel):
     id: int
+    tmdb_genre_id: int
     name: str
     created_at: datetime
-    deleted_at: Optional[datetime]
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 
 class GenreListResponse(BaseModel):
-    content: list[GenreResponse]
-    page: int
-    size: int
-    totalElements: int
-    totalPages: int
-    sort: str
+    items: List[GenreResponse]
