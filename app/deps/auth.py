@@ -39,6 +39,7 @@ def get_current_user(
     return user
 
 
+# Admin 권한이 필요한 경우(RBAC)
 def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
