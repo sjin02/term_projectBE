@@ -1,12 +1,9 @@
-from sqlmodel import create_engine, Session
+from sqlmodel import create_engine
 from app.core.config import settings
 
+# DB 연결 설정 (Engine 생성)
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
+    # echo=True  # 쿼리 로그를 보고 싶다면 주석 해제
 )
-
-
-def get_db():
-    with Session(engine) as session:
-        yield session

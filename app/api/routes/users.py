@@ -1,46 +1,157 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
 from redis import Redis
+from typing import Optional
 
+from app.core.docs import success_example, error_example
+from app.core.errors import ErrorCode, http_error, success_response
+from app.core.security import hash_password, verify_password
+from app.db.models import User, UserStatus, Review, Bookmark
 from app.deps.db import get_db
 from app.deps.redis import get_redis
 from app.deps.auth import get_current_user
+from app.repositories import users as users_repo
 from app.schemas.users import (
-    SignupRequest, UserMeResponse, UpdateMeRequest, ChangePasswordRequest
+    SignupRequest,
+    UserMeResponse,
+    UpdateMeRequest,
+    ChangePasswordRequest,
 )
-from app.services import users as users_svc
-from app.services import auth as auth_svc
-from app.db.models import User, Review, Bookmark
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-@router.post("/signup", response_model=UserMeResponse)
-def signup(body: SignupRequest, db: Session = Depends(get_db)):
-    user = users_svc.signup(db, body.email, body.password, body.nickname)
-    return UserMeResponse(**user.model_dump())
 
-@router.get("/me", response_model=UserMeResponse)
-def me(user=Depends(get_current_user)):
-    return UserMeResponse(**user.model_dump())
+def _refresh_key(user_id: int) -> str:
+    return f"refresh:{user_id}"
 
-@router.put("/me", response_model=UserMeResponse)
-def update_me(body: UpdateMeRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    user = users_svc.update_me(db, user, body.nickname)
-    return UserMeResponse(**user.model_dump())
 
-@router.patch("/me/password")
-def change_password(body: ChangePasswordRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    users_svc.change_password(db, user, body.current_password, body.new_password)
-    return {"ok": True}
+@router.post(
+    "/signup",
+    response_model=UserMeResponse,
+    responses={
+        **success_example(UserMeResponse, message="회원가입 성공"),
+        409: error_example(409, ErrorCode.DUPLICATE_RESOURCE, "이미 가입된 이메일입니다."),
+    },
+)
+def signup(
+    request: Request,
+    body: SignupRequest,
+    db: Session = Depends(get_db),
+):
+    # 1. 중복 확인
+    if users_repo.get_user_by_email(db, body.email):
+        raise http_error(409, ErrorCode.DUPLICATE_RESOURCE, "이미 가입된 이메일입니다.")
 
-@router.delete("/me")
-def delete_me(db: Session = Depends(get_db), rds: Redis = Depends(get_redis), user=Depends(get_current_user)):
-    users_svc.soft_delete_user(db, user)
-    auth_svc.logout(rds, user.id)  # refresh revoke
-    return {"ok": True}
+    # 2. 사용자 생성
+    user = User(
+        email=body.email,
+        password_hash=hash_password(body.password),
+        nickname=body.nickname,
+        status=UserStatus.ACTIVE,
+    )
+    created_user = users_repo.create_user(db, user)
+
+    return success_response(
+        request,
+        data=created_user.model_dump(),
+        message="회원가입이 완료되었습니다.",
+    )
+
+
+@router.get(
+    "/me",
+    response_model=UserMeResponse,
+    responses={**success_example(UserMeResponse)},
+)
+def me(request: Request, user=Depends(get_current_user)):
+    return success_response(request, data=user.model_dump())
+
+
+@router.put(
+    "/me",
+    response_model=UserMeResponse,
+    responses={**success_example(UserMeResponse, message="정보 수정 완료")},
+)
+def update_me(
+    request: Request,
+    body: UpdateMeRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    if body.nickname is not None:
+        user.nickname = body.nickname
+    
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return success_response(
+        request,
+        data=user.model_dump(),
+        message="회원 정보가 수정되었습니다.",
+    )
+
+
+@router.patch(
+    "/me/password",
+    responses={
+        **success_example(message="비밀번호 변경 완료"),
+        400: error_example(400, ErrorCode.BAD_REQUEST, "현재 비밀번호가 일치하지 않습니다."),
+    },
+)
+def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    if not verify_password(body.current_password, user.password_hash):
+        raise http_error(400, ErrorCode.BAD_REQUEST, "현재 비밀번호가 일치하지 않습니다.")
+
+    user.password_hash = hash_password(body.new_password)
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.add(user)
+    db.commit()
+
+    return success_response(request, message="비밀번호가 변경되었습니다.", data={"ok": True})
+
+
+@router.delete(
+    "/me",
+    responses={**success_example(message="회원 탈퇴 완료")},
+)
+def delete_me(
+    request: Request,
+    db: Session = Depends(get_db),
+    rds: Optional[Redis] = Depends(get_redis),
+    user=Depends(get_current_user),
+):
+    # Soft Delete
+    user.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.status = UserStatus.DELETED
+    db.add(user)
+    db.commit()
+
+    # 로그아웃 처리 (토큰 무효화)
+    if rds:
+        try:
+            rds.delete(_refresh_key(user.id))
+        except Exception:
+            pass
+
+    return success_response(request, message="회원 탈퇴가 완료되었습니다.", data={"ok": True})
+
 
 @router.get("/me/reviews")
-def my_reviews(page: int = 1, size: int = 20, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def my_reviews(
+    request: Request,
+    page: int = 1,
+    size: int = 20,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
     stmt = (
         select(Review)
         .where(Review.user_id == user.id)
@@ -49,10 +160,24 @@ def my_reviews(page: int = 1, size: int = 20, db: Session = Depends(get_db), use
         .limit(size)
     )
     items = list(db.exec(stmt).all())
-    return {"page": page, "size": size, "items": [r.model_dump() for r in items]}
+    return success_response(
+        request,
+        data={
+            "page": page,
+            "size": size,
+            "items": [r.model_dump() for r in items],
+        },
+    )
+
 
 @router.get("/me/bookmarks")
-def my_bookmarks(page: int = 1, size: int = 20, db: Session = Depends(get_db), user=Depends(get_current_user)):
+def my_bookmarks(
+    request: Request,
+    page: int = 1,
+    size: int = 20,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
     stmt = (
         select(Bookmark)
         .where(Bookmark.user_id == user.id)
@@ -61,4 +186,11 @@ def my_bookmarks(page: int = 1, size: int = 20, db: Session = Depends(get_db), u
         .limit(size)
     )
     items = list(db.exec(stmt).all())
-    return {"page": page, "size": size, "items": [b.model_dump() for b in items]}
+    return success_response(
+        request,
+        data={
+            "page": page,
+            "size": size,
+            "items": [b.model_dump() for b in items],
+        },
+    )
