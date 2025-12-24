@@ -12,3 +12,5 @@ firebase-admin
 pydantic-settings
 alembic
 email-validator
+firebase-admin
+google-auth

@@ -18,5 +18,6 @@ class LogoutResponse(BaseModel):
 class FirebaseRequest(BaseModel):
     id_token: str
 
-class KakaoRequest(BaseModel):
-    access_token: str
+# 구글 로그인용 요청 스키마
+class GoogleRequest(BaseModel):
+    id_token: str
