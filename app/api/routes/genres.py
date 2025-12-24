@@ -4,7 +4,7 @@ from typing import List
 
 from app.deps.db import get_db
 from app import schemas
-from app.services import genres as genre_service
+from app.repositories import genres as genre_service
 
 router = APIRouter(
     prefix="/api/v1", 
