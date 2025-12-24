@@ -1,10 +1,10 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
 class ReviewCreate(BaseModel):
-    rating: int = Field(..., ge=1, le=5)
-    comment: str = Field(..., min_length=1)
+    rating: int = Field(..., ge=1, le=5 , description="평점은 1부터 5까지의 정수입니다.")
+    comment: str = Field(..., min_length=1 , description="리뷰 내용은 최소 1자 이상이어야 합니다.")
 
 class ReviewUpdate(BaseModel):
     rating: Optional[int] = Field(None, ge=1, le=5)
@@ -21,3 +21,11 @@ class ReviewResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ReviewLikeResponse(BaseModel):
+    review_id: int
+    user_id: int
+    is_liked: bool # 좋아요 상태 (True: 좋아요, False: 취소됨)
+    total_likes: int # 갱신된 좋아요 수
+
+    model_config = ConfigDict(from_attributes=True)
