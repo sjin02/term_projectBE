@@ -143,11 +143,13 @@ def google_login(request: Request, body: GoogleRequest, db: Session = Depends(ge
         # 클라이언트 ID를 넣으면 해당 클라이언트에서 발급된 토큰인지까지 체크해줌 (보안)
         # settings.GOOGLE_CLIENT_ID 가 없으면 None으로 둬도 검증은 되지만, 보안상 넣는 게 좋음
         CLIENT_ID = getattr(settings, "GOOGLE_CLIENT_ID", None) 
-        
+        # [추가] 구글 Playground의 기본 클라이언트 ID
+        PLAYGROUND_CLIENT_ID = "407408718192.apps.googleusercontent.com"
+        # 3. [수정] 내 ID와 Playground ID 둘 다 허용하도록 리스트로 전달
         id_info = google_id_token.verify_oauth2_token(
             body.id_token, 
             google_requests.Request(), 
-            audience=CLIENT_ID
+            audience=[CLIENT_ID, PLAYGROUND_CLIENT_ID] 
         )
         
         email = id_info['email']
