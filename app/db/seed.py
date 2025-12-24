@@ -1,7 +1,7 @@
 import random
 from datetime import date, datetime, timedelta
 
-from sqlmodel import Session, select
+from sqlmodel import Session, select, SQLModel
 
 # 앱 설정 및 모델 임포트
 from app.db.session import engine
@@ -227,6 +227,9 @@ def create_reviews_and_bookmarks(db: Session):
 def main():
     print("🌱 Initialize DB Session...")
     with Session(engine) as session:
+        print("🛠️ Creating tables manually...")
+        SQLModel.metadata.create_all(session.bind)
+        print("✅ Tables created!")
         create_users(session)
         create_genres(session)
         create_contents(session)
