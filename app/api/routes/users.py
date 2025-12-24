@@ -10,9 +10,9 @@ from app.schemas.users import (
 )
 from app.services import users as users_svc
 from app.services import auth as auth_svc
-from app.db.models import User, Review, Bookmark, WatchHistory
+from app.db.models import User, Review, Bookmark
 
-router = APIRouter(prefix="/api/v1/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["users"])
 
 @router.post("/signup", response_model=UserMeResponse)
 def signup(body: SignupRequest, db: Session = Depends(get_db)):
@@ -62,22 +62,3 @@ def my_bookmarks(page: int = 1, size: int = 20, db: Session = Depends(get_db), u
     )
     items = list(db.exec(stmt).all())
     return {"page": page, "size": size, "items": [b.model_dump() for b in items]}
-
-@router.get("/me/watch-history")
-def my_watch_history(page: int = 1, size: int = 20, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    stmt = (
-        select(WatchHistory)
-        .where(WatchHistory.user_id == user.id)
-        .order_by(WatchHistory.created_at.desc())
-        .offset((page - 1) * size)
-        .limit(size)
-    )
-    items = list(db.exec(stmt).all())
-    return {"page": page, "size": size, "items": [w.model_dump() for w in items]}
-
-@router.get("/me/watch-time")
-def my_watch_time(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    # 간단 합산(파이썬) - 나중에 SQL SUM으로 최적화해도 됨
-    items = list(db.exec(select(WatchHistory).where(WatchHistory.user_id == user.id)).all())
-    total = sum(w.watched_minutes for w in items)
-    return {"total_minutes": total}

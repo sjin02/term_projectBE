@@ -1,12 +1,6 @@
 import redis
-from app.core.config import settings
+from typing import Optional
 
-_redis_client = None
-
-def get_redis() -> redis.Redis:
+def get_redis() -> Optional[redis.Redis]:
+    # Redis 없이 동작하도록 설정
     return None
-
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    return _redis_client

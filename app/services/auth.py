@@ -2,6 +2,7 @@
 from fastapi import HTTPException
 from redis import Redis
 from sqlmodel import Session
+from typing import Optional
 
 from app.core.security import verify_password, create_token, decode_token
 from app.repositories.users import get_user_by_email, get_user_by_id
@@ -30,7 +31,7 @@ def login(db: Session, rds: Redis, email: str, password: str):
         rds.setex(_refresh_key(user.id), REFRESH_MIN * 60, refresh)
     return access, refresh
 
-def refresh(db: Session, rds: Redis, refresh_token: str):
+def refresh(db: Session, rds: Optional[Redis], refresh_token: str):
     try:
         payload = decode_token(refresh_token)
     except ValueError:
@@ -44,14 +45,30 @@ def refresh(db: Session, rds: Redis, refresh_token: str):
     if not user or user.deleted_at is not None:
         raise HTTPException(status_code=401, detail="User not found")
 
-    saved = rds.get(_refresh_key(user_id))
-    if not saved or saved != refresh_token:
-        raise HTTPException(status_code=401, detail="Refresh token revoked")
+    # Redis가 있으면 토큰 검증 (Whitelist), 없으면 생략
+    if rds:
+        try:
+            saved = rds.get(_refresh_key(user_id))
+            if not saved or saved != refresh_token:
+                raise HTTPException(status_code=401, detail="Refresh token revoked")
+        except Exception:
+            pass
 
     new_access = create_token(str(user_id), "access", ACCESS_MIN)
     new_refresh = create_token(str(user_id), "refresh", REFRESH_MIN)
-    rds.setex(_refresh_key(user_id), REFRESH_MIN * 60, new_refresh)
+    
+    if rds:
+        try:
+            rds.setex(_refresh_key(user_id), REFRESH_MIN * 60, new_refresh)
+        except Exception:
+            pass
+
     return new_access, new_refresh
 
-def logout(rds: Redis, user_id: int):
-    rds.delete(_refresh_key(user_id))
+def logout(rds: Optional[Redis], user_id: int):
+    # Redis가 없으면 아무것도 하지 않음
+    if rds:
+        try:
+            rds.delete(_refresh_key(user_id))
+        except Exception:
+            pass

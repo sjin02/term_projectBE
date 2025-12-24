@@ -4,9 +4,7 @@ from math import ceil
 from fastapi import APIRouter, Depends, Query, Request
 from sqlmodel import Session, select, func
 
-from app.core.error_codes import ErrorCode
-from app.core.exceptions import http_error
-from app.core.responses import STANDARD_ERROR_RESPONSES, success_response
+from app.core.errors import ErrorCode, http_error, success_response, STANDARD_ERROR_RESPONSES
 from app.db.models import Content, Review, ReviewLike
 from app.deps.auth import get_current_user
 from app.deps.db import get_db
@@ -18,7 +16,7 @@ from app.schemas.reviews import (
 )
 
 router = APIRouter(
-    prefix="/api/v1",
+    prefix="",
     tags=["reviews"],
     responses=STANDARD_ERROR_RESPONSES,
 )

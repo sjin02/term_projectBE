@@ -3,8 +3,7 @@ from typing import Optional, Tuple
 
 from sqlmodel import Session
 
-from app.core.error_codes import ErrorCode
-from app.core.exceptions import http_error
+from app.core.errors import ErrorCode, http_error
 from app.db.models import Content
 from app.repositories import contents as contents_repo
 from app.services import genres as genres_svc

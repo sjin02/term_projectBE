@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session
 
-from app.core.responses import STANDARD_ERROR_RESPONSES, success_response
+from app.core.errors import ErrorCode, http_error, success_response, STANDARD_ERROR_RESPONSES
 from app.deps.auth import require_admin
 from app.deps.db import get_db
 from app.schemas.genres import GenreListResponse, GenreResponse
 from app.services import genres as genres_svc
 
 router = APIRouter(
-    prefix="/api/v1/genres",
+    prefix="/genres",
     tags=["genres"],
     responses=STANDARD_ERROR_RESPONSES,
 )

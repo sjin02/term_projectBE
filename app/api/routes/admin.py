@@ -5,7 +5,7 @@ from app.deps.db import get_db
 from app.deps.auth import require_admin
 from app.db.models import User
 
-router = APIRouter(prefix="/api/v1/users", tags=["admin"])
+router = APIRouter(prefix="/users", tags=["admin"])
 
 # Admin 전용 사용자 관리 API
 

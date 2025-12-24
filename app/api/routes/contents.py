@@ -1,9 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session
 
-from app.core.error_codes import ErrorCode
-from app.core.exceptions import http_error
-from app.core.responses import STANDARD_ERROR_RESPONSES, success_response
+from app.core.errors import ErrorCode, http_error, success_response, STANDARD_ERROR_RESPONSES
 from app.deps.auth import require_admin
 from app.deps.db import get_db
 from app.repositories import contents as contents_repo
@@ -21,7 +19,7 @@ from app.schemas.contents import (
 from app.services import contents as contents_svc
 
 router = APIRouter(
-    prefix="/api/v1/contents",
+    prefix="/contents",
     tags=["contents"],
     responses=STANDARD_ERROR_RESPONSES,
 )

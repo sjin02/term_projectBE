@@ -11,7 +11,7 @@ from app.schemas.auth import (
 )
 from app.services import auth as auth_svc
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db), rds: Redis = Depends(get_redis)):

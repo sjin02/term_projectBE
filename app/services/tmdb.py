@@ -4,8 +4,7 @@ from typing import Any, Dict, List
 import httpx
 
 from app.core.config import settings
-from app.core.error_codes import ErrorCode
-from app.core.exceptions import http_error
+from app.core.errors import ErrorCode, http_error
 
 
 def _params() -> dict:

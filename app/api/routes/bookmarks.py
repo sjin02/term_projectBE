@@ -4,12 +4,15 @@ from math import ceil
 from fastapi import APIRouter, Depends, Query, Request
 from sqlmodel import Session, select, func
 
-from app.core.error_codes import ErrorCode
-from app.core.exceptions import http_error
-from app.core.responses import STANDARD_ERROR_RESPONSES, success_response
+from app.core.errors import (
+    ErrorCode,
+    STANDARD_ERROR_RESPONSES,
+    http_error,
+    success_response,
+)
 from app.db.models import Bookmark, Content
 from app.deps.auth import get_current_user
-from app.deps.db import get_db
+from app.db.session import get_db
 from app.schemas.bookmarks import (
     BookmarkCreateRequest,
     BookmarkItem,
@@ -17,7 +20,7 @@ from app.schemas.bookmarks import (
 )
 
 router = APIRouter(
-    prefix="/api/v1/bookmarks",
+    prefix="/bookmarks",
     tags=["bookmarks"],
     responses=STANDARD_ERROR_RESPONSES,
 )

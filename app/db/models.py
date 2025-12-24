@@ -42,7 +42,6 @@ class User(SQLModel, table=True):
 
     reviews: List["Review"] = Relationship(back_populates="user")
     bookmarks: List["Bookmark"] = Relationship(back_populates="user")
-    watch_histories: List["WatchHistory"] = Relationship(back_populates="user")
 
 
 # ======================
@@ -101,3 +100,70 @@ class Content(SQLModel, table=True):
     )
     reviews: List["Review"] = Relationship(back_populates="content")
     bookmarks: List["Bookmark"] = Relationship(back_populates="content")
+
+
+# ======================
+# Review
+# ======================
+
+class Review(SQLModel, table=True):
+    __tablename__ = "reviews"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    user_id: int = Field(foreign_key="users.id")
+    content_id: int = Field(foreign_key="contents.id")
+
+    rating: int = Field(ge=1, le=5)
+    comment: str
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    user: User = Relationship(back_populates="reviews")
+    content: Content = Relationship(back_populates="reviews")
+    likes: List["ReviewLike"] = Relationship(back_populates="review")
+
+
+# ======================
+# Review Like
+# ======================
+
+class ReviewLike(SQLModel, table=True):
+    __tablename__ = "review_likes"
+
+    user_id: int = Field(
+        foreign_key="users.id",
+        primary_key=True,
+    )
+    review_id: int = Field(
+        foreign_key="reviews.id",
+        primary_key=True,
+    )
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    review: Review = Relationship(back_populates="likes")
+
+
+# ======================
+# Bookmark
+# ======================
+
+class Bookmark(SQLModel, table=True):
+    __tablename__ = "bookmarks"
+
+    user_id: int = Field(
+        foreign_key="users.id",
+        primary_key=True,
+    )
+    content_id: int = Field(
+        foreign_key="contents.id",
+        primary_key=True,
+    )
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    user: User = Relationship(back_populates="bookmarks")
+    content: Content = Relationship(back_populates="bookmarks")
+
