@@ -1,22 +1,19 @@
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
-class GenreBase(BaseModel):
-    name: str = Field(min_length=1, max_length=50)
+from pydantic import BaseModel
 
-# 생성 요청 (POST)
-class GenreCreate(GenreBase):
-    pass
 
-# 수정 요청 (PATCH) - 이름 변경 가능
-class GenreUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=50)
-
-# 응답 (GET)
-class GenreResponse(GenreBase):
+class GenreResponse(BaseModel):
     id: int
+    tmdb_genre_id: int
+    name: str
     created_at: datetime
-    # deleted_at은 보통 응답에 포함하지 않거나, 필요시 포함
+    deleted_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
+
+
+class GenreListResponse(BaseModel):
+    items: List[GenreResponse]

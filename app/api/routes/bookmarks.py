@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from app.deps.db import get_db # DB 세션 가져오는 함수 경로 확인 필요
+from app.deps.db import get_db 
 from app.services import bookmarks as bookmark_service
 
 router = APIRouter(

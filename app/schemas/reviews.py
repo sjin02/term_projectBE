@@ -2,13 +2,17 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
+from pydantic import BaseModel, Field
+
+
 class ReviewCreate(BaseModel):
     rating: int = Field(..., ge=1, le=5 , description="평점은 1부터 5까지의 정수입니다.")
     comment: str = Field(..., min_length=1 , description="리뷰 내용은 최소 1자 이상이어야 합니다.")
 
 class ReviewUpdate(BaseModel):
     rating: Optional[int] = Field(None, ge=1, le=5)
-    comment: Optional[str] = None
+    comment: Optional[str] = Field(None, min_length=1, max_length=2000)
+
 
 class ReviewResponse(BaseModel):
     id: int
@@ -18,6 +22,7 @@ class ReviewResponse(BaseModel):
     comment: str
     like_count: int
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

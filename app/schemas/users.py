@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict  # ConfigDict 추가
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -16,6 +16,9 @@ class UserMeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
+
+    # ORM 모드 활성화 (SQLModel 객체를 바로 model_validate 할 수 있게 함)
+    model_config = ConfigDict(from_attributes=True)
 
 class UpdateMeRequest(BaseModel):
     nickname: Optional[str] = None
