@@ -10,7 +10,7 @@ from app.schemas.auth import (
     FirebaseRequest, KakaoRequest
 )
 from app.services import auth as auth_svc
-
+from app.core.docs import success_example, error_example
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)

@@ -1,14 +1,18 @@
-from datetime import datetime, timezone
 from fastapi import HTTPException
-from sqlmodel import Session, select
-
+from sqlmodel import Session
+from app.core.errors import http_error, ErrorCode # 수정
 from app.core.security import hash_password, verify_password
 from app.repositories.users import get_user_by_email, create_user
 from app.db.models import User, UserStatus
 
 def signup(db: Session, email: str, password: str, nickname: str) -> User:
     if get_user_by_email(db, email):
-        raise HTTPException(status_code=409, detail="Email already exists")
+        # http_error 사용 및 한글 메시지 적용
+        raise http_error(
+            status_code=409,
+            code=ErrorCode.DUPLICATE_RESOURCE,
+            message="이미 가입된 이메일입니다."
+        )
 
     user = User(
         email=email,
@@ -17,6 +21,18 @@ def signup(db: Session, email: str, password: str, nickname: str) -> User:
         status=UserStatus.ACTIVE,
     )
     return create_user(db, user)
+
+def change_password(db: Session, user: User, current_password: str, new_password: str) -> None:
+    if not verify_password(current_password, user.password_hash):
+        raise http_error(
+            status_code=400,
+            code=ErrorCode.BAD_REQUEST,
+            message="현재 비밀번호가 일치하지 않습니다."
+        )
+    user.password_hash = hash_password(new_password)
+    db.add(user)
+    db.commit()
+
 
 def update_me(db: Session, user: User, nickname: str | None) -> User:
     if nickname is not None:
@@ -27,13 +43,6 @@ def update_me(db: Session, user: User, nickname: str | None) -> User:
     db.refresh(user)
     return user
 
-def change_password(db: Session, user: User, current_password: str, new_password: str) -> None:
-    if not verify_password(current_password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Wrong password")
-    user.password_hash = hash_password(new_password)
-    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    db.add(user)
-    db.commit()
 
 def soft_delete_user(db: Session, user: User) -> None:
     user.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)

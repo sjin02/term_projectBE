@@ -16,7 +16,7 @@ def create(db: Session, tmdb_id: int) -> Tuple[Content, dict]:
         raise http_error(
             status_code=409,
             code=ErrorCode.DUPLICATE_RESOURCE,
-            message="Content already exists",
+            message="이미 존재하는 콘텐츠입니다.",
             details={"contentId": exists.id, "tmdbId": tmdb_id},
         )
 
@@ -40,7 +40,7 @@ def get_detail(db: Session, content_id: int) -> Tuple[Content, dict]:
         raise http_error(
             status_code=404,
             code=ErrorCode.RESOURCE_NOT_FOUND,
-            message="Content not found",
+            message="요청하신 콘텐츠를 찾을 수 없습니다.",
             details={"contentId": content_id},
         )
     tmdb_detail = tmdb_svc.fetch_movie_detail(content.tmdb_id)
@@ -53,7 +53,7 @@ def delete(db: Session, content_id: int) -> None:
         raise http_error(
             status_code=404,
             code=ErrorCode.RESOURCE_NOT_FOUND,
-            message="Content not found",
+            message="요청하신 콘텐츠를 찾을 수 없습니다.",
             details={"contentId": content_id},
         )
     now = datetime.utcnow()

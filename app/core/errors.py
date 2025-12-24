@@ -9,28 +9,46 @@ from fastapi.responses import JSONResponse
 from app.core.logging import logger
 
 # ==========================================
-# 1. Error Codes (from error_codes.py)
+# 1. Error Codes (표준 코드 15종)
 # ==========================================
 
 class ErrorCode(str, Enum):
+    # 400
     BAD_REQUEST = "BAD_REQUEST"
     VALIDATION_FAILED = "VALIDATION_FAILED"
     INVALID_QUERY_PARAM = "INVALID_QUERY_PARAM"
+    
+    # 401
     UNAUTHORIZED = "UNAUTHORIZED"
     TOKEN_EXPIRED = "TOKEN_EXPIRED"
+    
+    # 403
     FORBIDDEN = "FORBIDDEN"
+    
+    # 404
     RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
     USER_NOT_FOUND = "USER_NOT_FOUND"
+    
+    # 409
     DUPLICATE_RESOURCE = "DUPLICATE_RESOURCE"
     STATE_CONFLICT = "STATE_CONFLICT"
+    
+    # 422
     UNPROCESSABLE_ENTITY = "UNPROCESSABLE_ENTITY"
+    
+    # 429
     TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS"
+    
+    # 500
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
     DATABASE_ERROR = "DATABASE_ERROR"
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
+    
+    # Success
     SUCCESS = "SUCCESS"
 
 
+# 상태 코드별 기본 에러 코드 매핑
 DEFAULT_ERROR_CODE_BY_STATUS = {
     400: ErrorCode.BAD_REQUEST,
     401: ErrorCode.UNAUTHORIZED,
@@ -48,12 +66,11 @@ def resolve_error_code(status_code: int) -> ErrorCode:
 
 
 # ==========================================
-# 2. Response Helpers (from responses.py)
+# 2. Response Helpers & Format
 # ==========================================
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
 
 def success_response(
     request: Request,
@@ -61,7 +78,7 @@ def success_response(
     *,
     status_code: int = 200,
     code: ErrorCode = ErrorCode.SUCCESS,
-    message: str = "OK",
+    message: str = "성공",  # 기본 메시지 한글화
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -74,7 +91,6 @@ def success_response(
             "data": data,
         },
     )
-
 
 def error_response(
     request: Request,
@@ -96,103 +112,15 @@ def error_response(
         },
     )
 
-
+# 이 기본 딕셔너리는 이제 문서용 헬퍼(docs.py)가 대체하므로 최소화하거나 삭제해도 됩니다.
+# 호환성을 위해 남겨두되 한글로 변경합니다.
 STANDARD_ERROR_RESPONSES = {
-    400: {
-        "description": "잘못된 요청",
-        "content": {
-            "application/json": {
-                "example": {
-                    "timestamp": "2025-03-05T12:34:56Z",
-                    "path": "/api/v1/example",
-                    "status": 400,
-                    "code": ErrorCode.BAD_REQUEST.value,
-                    "message": "요청 형식이 올바르지 않음",
-                    "details": {},
-                }
-            }
-        },
-    },
-    401: {
-        "description": "인증 실패",
-        "content": {
-            "application/json": {
-                "example": {
-                    "timestamp": "2025-03-05T12:34:56Z",
-                    "path": "/api/v1/example",
-                    "status": 401,
-                    "code": ErrorCode.UNAUTHORIZED.value,
-                    "message": "인증 토큰이 필요합니다.",
-                    "details": {},
-                }
-            }
-        },
-    },
-    403: {
-        "description": "권한 없음",
-        "content": {
-            "application/json": {
-                "example": {
-                    "timestamp": "2025-03-05T12:34:56Z",
-                    "path": "/api/v1/example",
-                    "status": 403,
-                    "code": ErrorCode.FORBIDDEN.value,
-                    "message": "접근 권한이 없습니다.",
-                    "details": {},
-                }
-            }
-        },
-    },
-    404: {
-        "description": "리소스를 찾을 수 없음",
-        "content": {
-            "application/json": {
-                "example": {
-                    "timestamp": "2025-03-05T12:34:56Z",
-                    "path": "/api/v1/example",
-                    "status": 404,
-                    "code": ErrorCode.RESOURCE_NOT_FOUND.value,
-                    "message": "요청한 리소스를 찾을 수 없습니다.",
-                    "details": {},
-                }
-            }
-        },
-    },
-    422: {
-        "description": "유효성 검증 실패",
-        "content": {
-            "application/json": {
-                "example": {
-                    "timestamp": "2025-03-05T12:34:56Z",
-                    "path": "/api/v1/example",
-                    "status": 422,
-                    "code": ErrorCode.VALIDATION_FAILED.value,
-                    "message": "필드 유효성 검사 실패",
-                    "details": {"field": "에러 메시지"},
-                }
-            }
-        },
-    },
-    500: {
-        "description": "서버 에러",
-        "content": {
-            "application/json": {
-                "example": {
-                    "timestamp": "2025-03-05T12:34:56Z",
-                    "path": "/api/v1/example",
-                    "status": 500,
-                    "code": ErrorCode.INTERNAL_SERVER_ERROR.value,
-                    "message": "Internal Server Error",
-                    "details": {},
-                }
-            }
-        },
-    },
+    500: {"description": "서버 내부 오류"}
 }
 
 
 # ==========================================
-# 3. Exception Helpers (from exceptions.py)
+# 3. http_error (Custom Exception)
 # ==========================================
 
 def http_error(
@@ -201,6 +129,9 @@ def http_error(
     message: str,
     details: dict | None = None,
 ) -> HTTPException:
+    """
+    모든 비즈니스 로직 에러는 이 함수를 사용하여 발생시킵니다.
+    """
     return HTTPException(
         status_code=status_code,
         detail={
@@ -212,24 +143,23 @@ def http_error(
 
 
 # ==========================================
-# 4. Exception Handlers (original errors.py)
+# 4. Exception Handlers
 # ==========================================
 
 def _extract_error(exc: HTTPException) -> tuple[ErrorCode, str, dict | None]:
     code: ErrorCode = resolve_error_code(exc.status_code)
-    message = "Error"
+    message = "오류가 발생했습니다."
     details: dict | None = None
 
     if isinstance(exc.detail, dict):
-        detail_dict = exc.detail
-        message = detail_dict.get("message", message)
-        details = detail_dict.get("details")
-        maybe_code = detail_dict.get("code")
-        if maybe_code:
+        # http_error로 생성된 예외
+        message = exc.detail.get("message", message)
+        details = exc.detail.get("details")
+        if "code" in exc.detail:
             try:
-                code = ErrorCode(maybe_code)
+                code = ErrorCode(exc.detail["code"])
             except ValueError:
-                code = resolve_error_code(exc.status_code)
+                pass
     elif isinstance(exc.detail, str):
         message = exc.detail
     else:
@@ -239,13 +169,10 @@ def _extract_error(exc: HTTPException) -> tuple[ErrorCode, str, dict | None]:
 
 
 async def http_exception_handler(request: Request, exc: HTTPException):
-    logger.warning(
-        "HTTPException %s %s %s",
-        request.method,
-        request.url.path,
-        exc.status_code,
-    )
+    # 로그 경고
     code, message, details = _extract_error(exc)
+    logger.warning(f"{code.value} {request.method} {request.url.path} - {message}")
+    
     return error_response(
         request,
         status_code=exc.status_code,
@@ -254,36 +181,30 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         details=details,
     )
 
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # 스키마 검증 실패 시 호출됨
+    field_errors: dict[str, str] = {}
+    for err in exc.errors():
+        # loc: ('body', 'email') -> "body.email"
+        loc = ".".join(str(x) for x in err.get("loc", []))
+        msg = err.get("msg", "잘못된 값입니다.")
+        field_errors[loc] = msg
+
+    logger.warning(f"VALIDATION_FAILED {request.method} {request.url.path} - {field_errors}")
+
+    return error_response(
+        request,
+        status_code=400,  # 422 대신 400 BAD_REQUEST 계열 사용 
+        code=ErrorCode.VALIDATION_FAILED,
+        message="입력값이 유효하지 않습니다.",
+        details=field_errors,
+    )
 
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    logger.exception(
-        "Unhandled error %s %s",
-        request.method,
-        request.url.path,
-    )
+    logger.exception(f"Unhandled Error {request.method} {request.url.path}")
     return error_response(
         request,
         status_code=500,
         code=ErrorCode.INTERNAL_SERVER_ERROR,
-        message="Internal Server Error",
-    )
-
-
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    logger.warning(
-        "Validation error %s %s",
-        request.method,
-        request.url.path,
-    )
-    field_errors: dict[str, str] = {}
-    for err in exc.errors():
-        loc = ".".join(str(x) for x in err.get("loc", []))
-        field_errors[loc] = err.get("msg")
-
-    return error_response(
-        request,
-        status_code=422,
-        code=ErrorCode.VALIDATION_FAILED,
-        message="Validation failed",
-        details=field_errors,
+        message="서버 내부 오류가 발생했습니다.",
     )

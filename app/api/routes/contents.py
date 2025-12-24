@@ -84,7 +84,7 @@ def top_rated(request: Request, limit: int = 10, db: Session = Depends(get_db)):
         raise http_error(
             status_code=400,
             code=ErrorCode.INVALID_QUERY_PARAM,
-            message="limit must be greater than 0",
+            message="limit은 0보다 커야 합니다.",
             details={"limit": limit},
         )
     rows = contents_svc.top_rated_(db, limit)
@@ -99,7 +99,7 @@ def top_rated(request: Request, limit: int = 10, db: Session = Depends(get_db)):
     ]
     return success_response(
         request,
-        message="Top rated contents fetched",
+        message="Top 순위의 콘텐츠들이 조회되었습니다.",
         data=TopRatedResponse(items=items).model_dump(),
     )
 
