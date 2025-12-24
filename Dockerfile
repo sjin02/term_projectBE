@@ -1,10 +1,10 @@
-FROM python:3.11-slim
+FROM python:3.10
 
 WORKDIR /app
 
 # 패키지 설치 등 기존 내용 ...
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=100 -i https://mirror.kakao.com/pypi/simple -r requirements.txt
 
 # 소스 코드 복사
 COPY . .

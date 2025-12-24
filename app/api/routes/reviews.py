@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 
-from database import get_db  # 팀원 코드에 맞게 import 수정
+from app.deps.db import get_db
 from app import schemas # schemas 경로 확인
 # [중요] 서비스 모듈 임포트
-from app.services import reviews as review_service 
+from app.repositories import reviews as review_service 
 
 router = APIRouter(
     prefix="/api/v1",

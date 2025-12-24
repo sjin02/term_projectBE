@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.deps.db import get_db 
-from app.services import bookmarks as bookmark_service
+from app.repositories import bookmarks as bookmark_service
 
 router = APIRouter(
     prefix="/api/v1/contents",
