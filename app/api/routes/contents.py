@@ -1,14 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session
 
-from app.core.docs import success_example, error_example
 from app.core.errors import ErrorCode, http_error, success_response, STANDARD_ERROR_RESPONSES
+from app.core.docs import success_example, error_example
 from app.deps.auth import require_admin
 from app.deps.db import get_db
+# [수정됨] app.services -> app.core 로 변경
+from app.core import tmdb as tmdb_svc 
 from app.repositories import contents as contents_repo
 from app.repositories import genres as genres_repo
-from app.core import tmdb as tmdb_svc  
 from app.schemas.contents import (
     ContentBase,
     ContentCreateRequest,
@@ -51,12 +52,19 @@ def _tmdb_payload(raw: dict) -> TMDBMoviePayload:
 
 
 def _content_base(db: Session, content) -> ContentBase:
-    return ContentBase.model_validate(
-        {
-            **content.model_dump(),
-            "genres": _genres(db, content.id),
-        }
-    )
+    # model_dump() 안정성을 위해 명시적 dict 구성
+    content_dict = {
+        "id": content.id,
+        "tmdb_id": content.tmdb_id,
+        "title": content.title,
+        "release_date": content.release_date,
+        "runtime_minutes": content.runtime_minutes,
+        "created_at": content.created_at,
+        "updated_at": content.updated_at,
+        "deleted_at": content.deleted_at,
+        "genres": _genres(db, content.id),
+    }
+    return ContentBase.model_validate(content_dict)
 
 
 @router.get(
@@ -73,7 +81,6 @@ def list_contents(
     size: int = 20,
     db: Session = Depends(get_db),
 ):
-    # Repository 직접 호출
     items, total = contents_repo.list_contents(
         db, q=q, genre_id=genre_id, sort=sort, page=page, size=size
     )
@@ -140,7 +147,6 @@ def get_content(
             details={"contentId": content_id}
         )
     
-    # TMDB 데이터 실시간 조회
     tmdb_detail = tmdb_svc.fetch_movie_detail(content.tmdb_id)
     
     response = ContentResponse(
@@ -167,24 +173,54 @@ def create_content(
     body: ContentCreateRequest,
     db: Session = Depends(get_db)
 ):
-    # 1. 중복 확인
-    exists = contents_repo.get_content_by_tmdb_id(db, body.tmdb_id)
-    if exists:
-        raise http_error(
-            409, ErrorCode.DUPLICATE_RESOURCE, "이미 존재하는 콘텐츠입니다.",
-            details={"contentId": exists.id}
-        )
-
-    # 2. TMDB 정보 조회
-    tmdb_detail = tmdb_svc.fetch_movie_detail(body.tmdb_id)
+    # 1. 중복 확인 (삭제된 데이터 포함)
+    existing = contents_repo.get_content_by_tmdb_id_with_deleted(db, body.tmdb_id)
     
-    # 3. 장르 처리 (Repo 호출)
+    # 2. 이미 존재하는 경우
+    if existing:
+        if existing.deleted_at is None:
+            # 활성 상태면 중복 에러
+            raise http_error(
+                409, ErrorCode.DUPLICATE_RESOURCE, "이미 존재하는 콘텐츠입니다.",
+                details={"contentId": existing.id}
+            )
+        else:
+            # 삭제된 상태면 복구(Restore)
+            tmdb_detail = tmdb_svc.fetch_movie_detail(body.tmdb_id)
+            
+            existing.title = tmdb_detail.get("title") or tmdb_detail.get("original_title")
+            existing.release_date = tmdb_detail.get("release_date")
+            existing.runtime_minutes = tmdb_detail.get("runtime")
+            existing.deleted_at = None  # 복구
+            existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
+            
+            # 장르 동기화
+            genres = tmdb_detail.get("genres") or []
+            active_genres = genres_repo.upsert_genres_from_tmdb(db, genres)
+            genre_ids = [g.id for g in active_genres if g.deleted_at is None]
+            contents_repo.set_content_genres(db, existing.id, genre_ids)
+
+            response = ContentResponse(
+                **_content_base(db, existing).model_dump(),
+                tmdb=_tmdb_payload(tmdb_detail),
+            )
+            return success_response(
+                request,
+                status_code=201,
+                message="삭제된 콘텐츠가 복구되었습니다.",
+                data=response.model_dump(),
+            )
+
+    # 3. 신규 생성
+    tmdb_detail = tmdb_svc.fetch_movie_detail(body.tmdb_id)
     genres = tmdb_detail.get("genres") or []
-    # (Genre Repo 사용)
     active_genres = genres_repo.upsert_genres_from_tmdb(db, genres)
     genre_ids = [g.id for g in active_genres if g.deleted_at is None]
 
-    # 4. 콘텐츠 생성
     content = contents_repo.create_content(
         db=db,
         tmdb_id=body.tmdb_id,
@@ -226,7 +262,7 @@ def delete_content(
             details={"contentId": content_id}
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     content.deleted_at = now
     content.updated_at = now
     db.add(content)

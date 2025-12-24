@@ -102,7 +102,7 @@ def get_popular_reviews(
     "/contents/{content_id}/reviews",
     status_code=201,
     responses={
-        **success_example(ReviewResponse, status_code=201, message="리뷰 작성 완료"),
+        **success_example(ReviewResponse, status_code=201, message="리뷰가 등록되었습니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
     }
 )
@@ -146,7 +146,7 @@ def create_review(
 @router.get(
     "/contents/{content_id}/reviews",
     responses={
-        **success_example(ReviewListResponse, message="리뷰 목록 조회 성공"),
+        **success_example(ReviewListResponse, message="리뷰 목록이 조회되었습니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
     }
 )
@@ -214,7 +214,7 @@ def get_reviews_by_content(
 @router.put(
     "/reviews/{review_id}",
     responses={
-        **success_example(ReviewResponse, message="리뷰 수정 완료"),
+        **success_example(ReviewResponse, message="리뷰가 수정되었습니다."),
         403: error_example(403, ErrorCode.FORBIDDEN, "수정 권한이 없습니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "리뷰를 찾을 수 없습니다."),
     }
@@ -264,7 +264,7 @@ def update_review(
 @router.delete(
     "/reviews/{review_id}",
     responses={
-        **success_example(message="리뷰 삭제 완료"),
+        **success_example(message="리뷰가 삭제되었습니다."),
         403: error_example(403, ErrorCode.FORBIDDEN, "삭제 권한이 없습니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "리뷰를 찾을 수 없습니다."),
     }
@@ -298,7 +298,7 @@ def delete_review(
     "/reviews/{review_id}/likes",
     status_code=201,
     responses={
-        **success_example(message="좋아요 성공", status_code=201),
+        **success_example(message="리뷰에 좋아요를 남겼습니다.", status_code=201),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "리뷰를 찾을 수 없습니다."),
         409: error_example(409, ErrorCode.DUPLICATE_RESOURCE, "이미 좋아요를 눌렀습니다."),
     }
@@ -347,7 +347,7 @@ def like_review(
 @router.delete(
     "/reviews/{review_id}/likes",
     responses={
-        **success_example(message="좋아요 취소 완료"),
+        **success_example(message="좋아요가 취소되었습니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "좋아요 정보를 찾을 수 없습니다."),
     }
 )

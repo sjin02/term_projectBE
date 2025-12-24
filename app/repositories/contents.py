@@ -88,7 +88,11 @@ def get_content_genres(db: Session, content_id: int) -> List[Genre]:
     )
     return list(db.exec(stmt).all())
 
-
+def get_content_by_tmdb_id_with_deleted(db: Session, tmdb_id: int) -> Content | None:
+    return db.exec(
+        select(Content).where(Content.tmdb_id == tmdb_id)
+    ).first()
+    
 def top_rated(db: Session, limit: int = 10):
     avg_rating = func.avg(Review.rating).label("avg_rating")
     review_count = func.count(Review.id).label("review_count")

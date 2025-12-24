@@ -167,6 +167,6 @@ def firebase_login():
     raise http_error(501, ErrorCode.UNKNOWN_ERROR, "아직 구현되지 않은 기능입니다.")
 
 
-@router.post("/kakao", status_code=501)
+@router.post("/google", status_code=501)
 def kakao_login():
     raise http_error(501, ErrorCode.UNKNOWN_ERROR, "아직 구현되지 않은 기능입니다.")

@@ -9,8 +9,6 @@ from app.deps.db import get_db
 from app.db.models import User, UserRole, UserStatus
 from app.schemas.users import UserMeResponse
 
-# users.py와 경로가 겹치므로 주의 (users.py의 /me 등이 먼저 매칭되어야 함)
-# 관리자 기능임을 명확히 하려면 prefix를 /api/v1/admin/users 로 변경하는 것도 고려 가능
 router = APIRouter(
     prefix="/users",
     tags=["admin"],
@@ -31,15 +29,19 @@ def list_users(
     q: str | None = Query(None, description="이메일 검색"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    include_deleted: bool = Query(False, description="삭제된 회원 포함 여부"),  # [추가] 옵션
     db: Session = Depends(get_db),
 ):
-    stmt = select(User).where(User.deleted_at.is_(None))
+    stmt = select(User)
+    
+    # [수정] 옵션이 False일 때만 삭제된 유저 제외 (기본값은 제외)
+    if not include_deleted:
+        stmt = stmt.where(User.deleted_at.is_(None))
+
     if q:
         stmt = stmt.where(User.email.ilike(f"%{q}%"))
     
-    # 페이징 처리를 위한 전체 개수 조회
     total_count = db.exec(select(func.count()).select_from(stmt.subquery())).one()
-    
     items = list(db.exec(stmt.offset((page - 1) * size).limit(size)).all())
     
     return success_response(
@@ -69,11 +71,14 @@ def get_user(
     db: Session = Depends(get_db),
 ):
     user = db.get(User, user_id)
-    if not user or user.deleted_at is not None:
+    
+    # [수정] 관리자는 삭제된 유저도 조회할 수 있어야 하므로 deleted_at 체크 제거
+    if not user:
         raise http_error(
             404, ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다.",
             details={"userId": user_id}
         )
+        
     return success_response(
         request,
         data=UserMeResponse.model_validate(user).model_dump()
@@ -96,10 +101,11 @@ def change_role(
     db: Session = Depends(get_db),
 ):
     user = db.get(User, user_id)
-    if not user or user.deleted_at is not None:
+    
+    # [수정] 삭제된 유저라도 권한 변경 등 관리는 가능하도록 체크 제거
+    if not user:
         raise http_error(404, ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다.")
 
-    # Enum 유효성 검사 (선택 사항)
     if role not in [r.value for r in UserRole]:
         raise http_error(400, ErrorCode.BAD_REQUEST, f"허용되지 않는 Role입니다: {role}")
 
@@ -126,18 +132,33 @@ def change_status(
     db: Session = Depends(get_db),
 ):
     user = db.get(User, user_id)
-    if not user or user.deleted_at is not None:
+    
+    # [수정] 삭제된 유저도 복구시켜줘야 하므로 deleted_at 체크 제거
+    if not user:
         raise http_error(404, ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다.")
 
-    # Enum 유효성 검사
     if status not in [s.value for s in UserStatus]:
         raise http_error(400, ErrorCode.BAD_REQUEST, f"허용되지 않는 Status입니다: {status}")
 
     user.status = status
+    
+    # [핵심] 상태를 ACTIVE로 변경하면, deleted_at을 지워서 '복구' 처리
+    if status == UserStatus.ACTIVE.value:
+        user.deleted_at = None
+
     db.add(user)
     db.commit()
+    db.refresh(user)
     
-    return success_response(request, message="사용자 상태가 변경되었습니다.", data={"userId": user_id, "status": status})
+    return success_response(
+        request, 
+        message="사용자 상태가 변경되었습니다.", 
+        data={
+            "userId": user_id, 
+            "status": status,
+            "restored": user.deleted_at is None
+        }
+    )
 
 
 @router.delete(
@@ -157,7 +178,6 @@ def force_delete(
     if not user:
         raise http_error(404, ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다.")
 
-    # 이미 삭제된 유저인지 체크할 수도 있음
     if user.deleted_at:
          raise http_error(409, ErrorCode.STATE_CONFLICT, "이미 삭제된 사용자입니다.")
 
