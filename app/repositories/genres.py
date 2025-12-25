@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Iterable, List, Sequence
-
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.db.models import Genre

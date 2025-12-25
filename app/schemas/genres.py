@@ -17,3 +17,8 @@ class GenreResponse(BaseModel):
 
 class GenreListResponse(BaseModel):
     items: List[GenreResponse]
+
+class GenreCreate(BaseModel):
+    name: str
+    tmdb_genre_id: int
+
