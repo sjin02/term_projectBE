@@ -4,7 +4,7 @@ from app.deps.db import get_db
 from app.repositories import bookmarks as bookmark_service
 
 router = APIRouter(
-    prefix="/api/v1/contents",
+    prefix="/contents",
     tags=["Bookmarks"]
 )
 

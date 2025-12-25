@@ -8,7 +8,7 @@ from app import schemas # schemas 경로 확인
 from app.repositories import reviews as review_service 
 
 router = APIRouter(
-    prefix="/api/v1",
+    prefix="",
     tags=["reviews"]
 )
 
