@@ -1,18 +1,20 @@
 # Movie (FastAPI)
 
-FastAPI 기반 영화 정보 및 커뮤니티 백엔드 API API 서버입니다.  
-JWT 인증, 소셜 로그인, RBAC, CRUD API, 통계 기능을 포함합니다.
-TMDB API를 통해 영화 정보를 동기화하며, 사용자는 리뷰 작성, 좋아요, 북마크 기능을 이용할 수 있습니다.
+이 프로젝트는 TMDB API를 활용한 영화/TV 시리즈 정보 제공, 리뷰 작성, 북마크 관리 기능을 제공하는 RESTful API 서버입니다.
+<br>
+FastAPI를 기반으로 구축되었으며, JWT 인증, RBAC 권한 관리, Redis 캐싱, Docker 컨테이너 배포 환경을 포함하고 있습니다.
 ---
 
 ## Tech Stack
 
 - **Backend**: FastAPI
-- **ORM**: SQLModel
+- **ORM**: SQLModel (SQLAlchemy) + Alembic (Migration)
 - **DB**: PostgreSQL
 - **Auth**: JWT, Firebase Auth, google OAuth
 - **Cache**: Redis
 - **Docs**: Swagger (OpenAPI)
+- **Infra**: GitHub Actions (CI/CD)
+- **External API**: TMDB API, Firebase Auth, google OAuth
 - **Container**: Docker, Docker Compose
 
 ---
@@ -28,7 +30,7 @@ TMDB API를 통해 영화 정보를 동기화하며, 사용자는 리뷰 작성,
 - **사용자 인증**: JWT(Access/Refresh) 기반 로그인, 소셜 로그인(구글/파이어베이스), RBAC(관리자/일반) 권한 제어.
 - **커뮤니티 기능**: 영화별 리뷰 작성(CRUD), 평점 부여, 리뷰 좋아요, 인기 리뷰 조회.
 - **개인화 기능**: 관심 영화 북마크(찜하기), 마이페이지(내가 쓴 리뷰/북마크 관리).
-- **관리자 기능**: 전체 회원 조회, 악성 유저 차단/강제 탈퇴, 권한 변경.
+- **관리자 기능**: 전체 회원 조회, 악성 유저 차단/강제 탈퇴, 권한 변경, 콘텐츠 관리.
 
 ---
 
@@ -44,10 +46,13 @@ Redis, DB, API 서버가 한 번에 실행되며 초기 데이터(Seed)가 자�
 git clone <REPOSITORY_URL>
 cd term_projectBE
 
-# 2. 실행 (빌드 및 백그라운드 실행)
+# 2. 환경 변수 설정 (.env.example 복사 후 값 채우기)
+cp .env.example .env
+
+# 3. 컨테이너 빌드 및 실행 (Background)
 docker-compose up -d --build
 
-# 3. 로그 확인 (서버 시작 및 DB 시딩 확인)
+# 4. 로그 확인
 docker-compose logs -f api
 ```
 ## Run Locally (Docker 없이)
@@ -55,19 +60,35 @@ Python 3.10+ 환경이 필요합니다.
 
 ```bash
 # 1. 가상환경 생성 및 활성화
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# 1. 가상 환경 생성 및 활성화
+python -m venv venv
+source venv/bin/activate  # Windows: .\venv\Scripts\activate
 
 # 2. 의존성 설치
 pip install -r requirements.txt
 
-# .env.example을 참고하여 .env파일 작성
-# 3. 로컬 DB(Postgres) 및 Redis 실행 필요 (Docker 사용 권장)
-docker-compose up -d db redis 
+# 3. 로컬 DB(Postgres, Redis) 실행 (Docker 활용)
+docker-compose up -d db redis
 
-# 4. 서버 실행
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+# 4. DB 마이그레이션 및 시드 데이터 주입
+alembic upgrade head
+python seed/seed.py
+
+# 5. 서버 실행
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+### 테스트
+Pytest를 사용하여 단위 및 통합 테스트를 수행합니다.
+
+```bash
+# 전체 테스트 실행
+pytest
+
+# 상세 로그와 함께 실행
+pytest -vv
+```
+* 깃허브 액션으로 자동 테스트가 진행됩니다.
 ---
 ## 3. 환경변수 설명 (.env)
 .env.example 파일을 참고하여 .env 파일을 생성해야 합니다.
@@ -107,7 +128,7 @@ Health Check: http://113.198.66.75:10093/health
 | ------------------ | --------- | ----------- |
 | 영화 목록 조회 / 검색      | ✅         | ✅           |
 | 영화 상세 정보 조회        | ✅         | ✅           |
-| 리뷰 작성 / 수정 / 삭제    | ✅ (본인 것만) | ✅ (모든 리뷰)   |
+| 리뷰 작성 / 수정 / 삭제    | ✅ (본인 것만) | ✅    |
 | 리뷰 좋아요 / 북마크       | ✅         | ✅           |
 | 영화 데이터 Sync (TMDB) | ❌         | ✅           |
 | 영화 생성 / 수정 / 삭제    | ❌         | ✅           |
@@ -132,7 +153,8 @@ Docker Compose 환경 기준 정보입니다.
 * Internal Host: db (Docker Network)
 * Port: 5432
 * Database: movie
-* user 및 password 정보는 텍스트 파일로 제출하겠습니다.
+* user : postgres
+* password 정보는 텍스트 파일로 제출하겠습니다.
 
 ---
 ## 9. 주요 엔드포인트 요약
@@ -154,21 +176,43 @@ Docker Compose 환경 기준 정보입니다.
 ---
 
 ## 10. 성능 및 보안 고려사항
-* Redis Caching:
 
-    * Refresh Token을 Redis에 저장하여 탈취된 토큰을 서버에서 즉시 무효화할 수 있도록 보안 강화.
+### 10.1 표준화된 에러 응답
+모든 API 예외 상황에 대해 통일된 JSON 포맷을 반환하여 클라이언트 처리를 용이하게 했습니다.
 
-* Pagination:
+```JSON
+{
+  "timestamp": "2025-12-25T12:00:00Z",
+  "path": "/api/contents/99999",
+  "status": 404,
+  "code": "RESOURCE_NOT_FOUND",
+  "message": "해당 콘텐츠를 찾을 수 없습니다.",
+  "details": null
+}
+```
+### 10.2 보안 (Security)
+* 비밀번호 해시: bcrypt를 사용하여 비밀번호를 단방향 암호화하여 저장합니다.
 
-    * 대량의 영화/리뷰 데이터 조회 시 DB 부하를 줄이기 위해 page, size 기반 오프셋 페이징 적용.
+* JWT 인증: Stateless한 인증 방식을 사용하며, Access/Refresh Token rotation을 적용했습니다.
 
-* Soft Delete:
+* RBAC: Depends(require_admin) 등을 통해 API 레벨에서 역할을 엄격하게 검증합니다.
 
-    * deleted_at 컬럼을 사용하여 데이터를 물리적으로 삭제하지 않고 보존하여, 실수로 인한 데이터 손실 방지 및 복구 기능 구현.
+* CORS: 허용된 오리진에서만 요청 가능하도록 설정했습니다.
 
-* Database Indexing:
+### 10.3 성능 (Performance)
+* Redis Caching: Refresh Token을 Redis에 저장하여 탈취된 토큰을 서버에서 즉시 무효화할 수 있도록 보안을 강화했습니다.
 
-    * 검색 성능 향상을 위해 contents(title), users(email) 등에 인덱스 적용.
+* Rate Limiting: slowapi를 사용하여 IP 기반의 요청 제한을 걸어 DDoS 및 어뷰징을 방지했습니다.
+
+* N+1 문제 해결: SQLModel(SQLAlchemy)의 selectinload 등을 활용하여 관계형 데이터 조회 시 쿼리를 최적화했습니다.
+
+* Pagination: 대량의 영화/리뷰 데이터 조회 시 DB 부하를 줄이기 위해 page, size, 쿼리, 정렬 기반 오프셋 페이징을 적용했습니다.
+
+* Soft Delete: deleted_at 컬럼을 사용하여 데이터를 물리적으로 삭제하지 않고 보존하여, 실수로 인한 데이터 손실 방지 및 복구 기능을 구현했습니다.
+
+
+### 10.4 CI/CD (추가점수 기능 구현)
+GitHub Actions: .github/workflows/ci-cd.yaml을 통해 main 브랜치 푸시 시 자동 테스트 및 Docker 이미지 빌드가 수행됩니다.
 
 ---
 
