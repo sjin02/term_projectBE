@@ -5,7 +5,7 @@ from redis import Redis
 from typing import Optional
 
 from app.core.docs import success_example, error_example
-from app.core.errors import ErrorCode, http_error, success_response
+from app.core.errors import ErrorCode, http_error, success_response, STANDARD_ERROR_RESPONSES
 from app.core.security import hash_password, verify_password
 from app.db.models import User, UserStatus, Review, Bookmark
 from app.deps.db import get_db
@@ -19,7 +19,11 @@ from app.schemas.users import (
     ChangePasswordRequest,
 )
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(
+    prefix="/users", 
+    tags=["users"],
+    responses=STANDARD_ERROR_RESPONSES
+)
 
 
 def _refresh_key(user_id: int) -> str:
@@ -39,11 +43,9 @@ def signup(
     body: SignupRequest,
     db: Session = Depends(get_db),
 ):
-    # 1. 중복 확인
     if users_repo.get_user_by_email(db, body.email):
         raise http_error(409, ErrorCode.DUPLICATE_RESOURCE, "이미 가입된 이메일입니다.")
 
-    # 2. 사용자 생성
     user = User(
         email=body.email,
         password_hash=hash_password(body.password),
@@ -62,7 +64,10 @@ def signup(
 @router.get(
     "/me",
     response_model=UserMeResponse,
-    responses={**success_example(UserMeResponse)},
+    responses={
+        **success_example(UserMeResponse),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+    },
 )
 def me(request: Request, user=Depends(get_current_user)):
     return success_response(request, data=user.model_dump())
@@ -71,7 +76,10 @@ def me(request: Request, user=Depends(get_current_user)):
 @router.put(
     "/me",
     response_model=UserMeResponse,
-    responses={**success_example(UserMeResponse, message="정보 수정 완료")},
+    responses={
+        **success_example(UserMeResponse, message="정보 수정 완료"),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+    },
 )
 def update_me(
     request: Request,
@@ -99,6 +107,7 @@ def update_me(
     responses={
         **success_example(message="비밀번호 변경 완료"),
         400: error_example(400, ErrorCode.BAD_REQUEST, "현재 비밀번호가 일치하지 않습니다."),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
     },
 )
 def change_password(
@@ -120,7 +129,10 @@ def change_password(
 
 @router.delete(
     "/me",
-    responses={**success_example(message="회원 탈퇴 완료")},
+    responses={
+        **success_example(message="회원 탈퇴 완료"),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다.")
+    },
 )
 def delete_me(
     request: Request,
@@ -128,13 +140,11 @@ def delete_me(
     rds: Optional[Redis] = Depends(get_redis),
     user=Depends(get_current_user),
 ):
-    # Soft Delete
     user.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     user.status = UserStatus.DELETED
     db.add(user)
     db.commit()
 
-    # 로그아웃 처리 (토큰 무효화)
     if rds:
         try:
             rds.delete(_refresh_key(user.id))
@@ -144,7 +154,13 @@ def delete_me(
     return success_response(request, message="회원 탈퇴가 완료되었습니다.", data={"ok": True})
 
 
-@router.get("/me/reviews")
+@router.get(
+    "/me/reviews",
+    responses={
+        **success_example(description="내 리뷰 목록 조회"),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다.")
+    }
+)
 def my_reviews(
     request: Request,
     page: int = 1,
@@ -170,7 +186,13 @@ def my_reviews(
     )
 
 
-@router.get("/me/bookmarks")
+@router.get(
+    "/me/bookmarks",
+    responses={
+        **success_example(description="내 북마크 목록 조회"),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다.")
+    }
+)
 def my_bookmarks(
     request: Request,
     page: int = 1,

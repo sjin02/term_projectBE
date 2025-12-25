@@ -6,7 +6,6 @@ from app.core.errors import ErrorCode, http_error, success_response, STANDARD_ER
 from app.core.docs import success_example, error_example
 from app.deps.auth import require_admin
 from app.deps.db import get_db
-# [수정됨] app.services -> app.core 로 변경
 from app.core import tmdb as tmdb_svc 
 from app.repositories import contents as contents_repo
 from app.repositories import genres as genres_repo
@@ -52,7 +51,6 @@ def _tmdb_payload(raw: dict) -> TMDBMoviePayload:
 
 
 def _content_base(db: Session, content) -> ContentBase:
-    # model_dump() 안정성을 위해 명시적 dict 구성
     content_dict = {
         "id": content.id,
         "tmdb_id": content.tmdb_id,
@@ -98,7 +96,10 @@ def list_contents(
 @router.get(
     "/top-rated",
     response_model=TopRatedResponse,
-    responses={**success_example(TopRatedResponse)},
+    responses={
+        **success_example(TopRatedResponse),
+        400: error_example(400, ErrorCode.INVALID_QUERY_PARAM, "limit 값 오류")
+    },
 )
 def top_rated(
     request: Request,
@@ -165,6 +166,8 @@ def get_content(
     response_model=ContentResponse,
     responses={
         **success_example(ContentResponse, message="콘텐츠 생성 완료", status_code=201),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+        403: error_example(403, ErrorCode.FORBIDDEN, "관리자 권한이 필요합니다."),
         409: error_example(409, ErrorCode.DUPLICATE_RESOURCE, "이미 존재하는 콘텐츠입니다."),
     },
 )
@@ -173,32 +176,27 @@ def create_content(
     body: ContentCreateRequest,
     db: Session = Depends(get_db)
 ):
-    # 1. 중복 확인 (삭제된 데이터 포함)
     existing = contents_repo.get_content_by_tmdb_id_with_deleted(db, body.tmdb_id)
     
-    # 2. 이미 존재하는 경우
     if existing:
         if existing.deleted_at is None:
-            # 활성 상태면 중복 에러
             raise http_error(
                 409, ErrorCode.DUPLICATE_RESOURCE, "이미 존재하는 콘텐츠입니다.",
                 details={"contentId": existing.id}
             )
         else:
-            # 삭제된 상태면 복구(Restore)
+            # 복구 로직
             tmdb_detail = tmdb_svc.fetch_movie_detail(body.tmdb_id)
-            
             existing.title = tmdb_detail.get("title") or tmdb_detail.get("original_title")
             existing.release_date = tmdb_detail.get("release_date")
             existing.runtime_minutes = tmdb_detail.get("runtime")
-            existing.deleted_at = None  # 복구
+            existing.deleted_at = None
             existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             
             db.add(existing)
             db.commit()
             db.refresh(existing)
             
-            # 장르 동기화
             genres = tmdb_detail.get("genres") or []
             active_genres = genres_repo.upsert_genres_from_tmdb(db, genres)
             genre_ids = [g.id for g in active_genres if g.deleted_at is None]
@@ -215,7 +213,6 @@ def create_content(
                 data=response.model_dump(),
             )
 
-    # 3. 신규 생성
     tmdb_detail = tmdb_svc.fetch_movie_detail(body.tmdb_id)
     genres = tmdb_detail.get("genres") or []
     active_genres = genres_repo.upsert_genres_from_tmdb(db, genres)
@@ -247,6 +244,8 @@ def create_content(
     dependencies=[Depends(require_admin)],
     responses={
         **success_example(message="콘텐츠 삭제 완료"),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+        403: error_example(403, ErrorCode.FORBIDDEN, "관리자 권한이 필요합니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "요청하신 콘텐츠를 찾을 수 없습니다."),
     },
 )

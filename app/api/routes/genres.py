@@ -14,14 +14,12 @@ from app.schemas.genres import (
     GenreUpdate
 )
 
-# Prefix는 main.py 설정에 따라 '/genres'가 됩니다.
 router = APIRouter(
     prefix="/genres",
     tags=["genres"],
     responses=STANDARD_ERROR_RESPONSES,
 )
 
-# 1. 목록 조회 (GET /genres)
 @router.get(
     "",
     response_model=GenreListResponse,
@@ -36,13 +34,16 @@ def list_genres(request: Request, db: Session = Depends(get_db)):
         data=payload.model_dump(),
     )
 
-# 2. TMDB 동기화 (POST /genres/sync)
 @router.post(
     "/sync",
     dependencies=[Depends(require_admin)],
     status_code=201,
     response_model=GenreListResponse,
-    responses={**success_example(GenreListResponse, message="동기화 완료", status_code=201)},
+    responses={
+        **success_example(GenreListResponse, message="동기화 완료", status_code=201),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+        403: error_example(403, ErrorCode.FORBIDDEN, "관리자 권한이 필요합니다."),
+    },
 )
 def sync_genres(request: Request, db: Session = Depends(get_db)):
     tmdb_genres = tmdb_svc.fetch_genre_list()
@@ -57,7 +58,6 @@ def sync_genres(request: Request, db: Session = Depends(get_db)):
         data=payload.model_dump(),
     )
 
-# 3. 생성 (POST /genres) - 관리자 전용
 @router.post(
     "",
     dependencies=[Depends(require_admin)],
@@ -65,6 +65,8 @@ def sync_genres(request: Request, db: Session = Depends(get_db)):
     response_model=GenreResponse,
     responses={
         **success_example(GenreResponse, message="장르 생성 완료", status_code=201),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+        403: error_example(403, ErrorCode.FORBIDDEN, "관리자 권한이 필요합니다."),
         409: error_example(409, ErrorCode.DUPLICATE_RESOURCE, "이미 존재하는 장르입니다."),
     },
 )
@@ -85,14 +87,16 @@ def create_genre(
         data=GenreResponse.model_validate(genre).model_dump(),
     )
 
-# 4. 수정 (PATCH /genres/{genre_id}) - 관리자 전용
 @router.patch(
     "/{genre_id}",
     dependencies=[Depends(require_admin)],
     response_model=GenreResponse,
     responses={
         **success_example(GenreResponse, message="장르 수정 완료"),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+        403: error_example(403, ErrorCode.FORBIDDEN, "관리자 권한이 필요합니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "장르를 찾을 수 없습니다."),
+        409: error_example(409, ErrorCode.DUPLICATE_RESOURCE, "이미 존재하는 장르 ID입니다."),
     },
 )
 def update_genre(
@@ -114,13 +118,14 @@ def update_genre(
         data=GenreResponse.model_validate(updated_genre).model_dump(),
     )
 
-# 5. 삭제 (DELETE /genres/{genre_id}) - 관리자 전용
 @router.delete(
     "/{genre_id}",
     dependencies=[Depends(require_admin)],
     status_code=200,
     responses={
         **success_example(message="장르 삭제 완료"),
+        401: error_example(401, ErrorCode.UNAUTHORIZED, "로그인이 필요합니다."),
+        403: error_example(403, ErrorCode.FORBIDDEN, "관리자 권한이 필요합니다."),
         404: error_example(404, ErrorCode.RESOURCE_NOT_FOUND, "장르를 찾을 수 없습니다."),
     },
 )
