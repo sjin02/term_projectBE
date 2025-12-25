@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -34,3 +34,7 @@ class ReviewLikeResponse(BaseModel):
     total_likes: int # 갱신된 좋아요 수
 
     model_config = ConfigDict(from_attributes=True)
+
+class ReviewListResponse(BaseModel):
+    items: List[ReviewResponse]
+    total: int
