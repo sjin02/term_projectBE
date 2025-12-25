@@ -5,6 +5,7 @@ services:
     build: .
     ports:
       - "8080:8000"
+    restart: always  
     env_file:
       - .env
     depends_on:
@@ -13,6 +14,7 @@ services:
 
   db:
     image: postgres:15
+    restart: always
     environment:
       POSTGRES_DB: movie
       POSTGRES_USER: postgres
