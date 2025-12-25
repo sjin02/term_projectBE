@@ -25,10 +25,11 @@ jobs:
     - name: Run Tests
       # .env 파일이 없어도 테스트가 돌도록 환경변수 설정
       env:
-        DATABASE_URL: sqlite:///:memory:
+        # 값을 따옴표로 감싸서 문자열임을 명시
+        DATABASE_URL: "sqlite:///:memory:"
         JWT_SECRET: test_secret
         JWT_ALGORITHM: HS256
-        REDIS_URL: redis://localhost:6379
+        REDIS_URL: "redis://localhost:6379"  
         TMDB_API_KEY: test_key
       run: |
         pytest tests/
