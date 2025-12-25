@@ -15,6 +15,7 @@ from src.core.errors import (
     http_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
+    rate_limit_handler,
 )
 
 # 1. Rate Limiter 설정 (IP 기준, 분당 100회 제한)
@@ -55,6 +56,7 @@ app.middleware("http")(logging_middleware)
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 for r in all_routers:
     app.include_router(r)

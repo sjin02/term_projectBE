@@ -3,9 +3,10 @@ from enum import Enum
 from typing import Any, Optional
 
 from fastapi import HTTPException, Request
-from fastapi.encoders import jsonable_encoder  # <--- [추가] 중요!
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded  # [추가] RateLimit 예외
 
 from src.core.logging import logger
 
@@ -81,7 +82,6 @@ def success_response(
     code: ErrorCode = ErrorCode.SUCCESS,
     message: str = "성공",
 ) -> JSONResponse:
-    # jsonable_encoder로 감싸서 datetime 등을 안전하게 변환
     return JSONResponse(
         status_code=status_code,
         content=jsonable_encoder({
@@ -103,7 +103,6 @@ def error_response(
     message: str,
     details: Optional[dict] = None,
 ) -> JSONResponse:
-    # 에러 응답도 안전하게 변환
     return JSONResponse(
         status_code=status_code,
         content=jsonable_encoder({
@@ -116,9 +115,38 @@ def error_response(
         }),
     )
 
-
+# [수정] 모든 라우터에 기본 적용될 에러 응답 예시 (Swagger용)
 STANDARD_ERROR_RESPONSES = {
-    500: {"description": "서버 내부 오류"}
+    429: {
+        "description": "요청 한도 초과",
+        "content": {
+            "application/json": {
+                "example": {
+                    "timestamp": "2025-03-05T12:34:56Z",
+                    "path": "/current/path",
+                    "status": 429,
+                    "code": "TOO_MANY_REQUESTS",
+                    "message": "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
+                    "details": {"error": "Rate limit exceeded: 100 per 1 minute"}
+                }
+            }
+        }
+    },
+    500: {
+        "description": "서버 내부 오류",
+        "content": {
+            "application/json": {
+                "example": {
+                    "timestamp": "2025-03-05T12:34:56Z",
+                    "path": "/current/path",
+                    "status": 500,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "서버 내부 오류가 발생했습니다.",
+                    "details": {}
+                }
+            }
+        }
+    }
 }
 
 
@@ -205,4 +233,15 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         status_code=500,
         code=ErrorCode.INTERNAL_SERVER_ERROR,
         message="서버 내부 오류가 발생했습니다.",
+    )
+
+# [추가] 429 에러 핸들러
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    logger.warning(f"RATE_LIMIT_EXCEEDED {request.method} {request.url.path}")
+    return error_response(
+        request,
+        status_code=429,
+        code=ErrorCode.TOO_MANY_REQUESTS,
+        message="요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
+        details={"error": str(exc)},
     )

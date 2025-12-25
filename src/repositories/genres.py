@@ -14,7 +14,6 @@ def create_genre(db: Session, genre_in: GenreCreate) -> Genre:
     # 중복 체크
     existing = db.exec(select(Genre).where(Genre.tmdb_genre_id == genre_in.tmdb_genre_id)).first()
     if existing:
-        # [수정] 한글 에러 메시지
         raise ValueError(f"이미 존재하는 장르입니다. (TMDB ID: {genre_in.tmdb_genre_id})")
 
     genre = Genre(
@@ -31,14 +30,12 @@ def create_genre(db: Session, genre_in: GenreCreate) -> Genre:
 def update_genre(db: Session, genre_id: int, genre_in: GenreUpdate) -> Genre:
     genre = get_genre(db, genre_id)
     if not genre:
-        # [수정] 한글 에러 메시지
         raise ValueError("해당 장르를 찾을 수 없습니다.")
     
     # TMDB ID 변경 시 중복 체크
     if genre.tmdb_genre_id != genre_in.tmdb_genre_id:
         existing = db.exec(select(Genre).where(Genre.tmdb_genre_id == genre_in.tmdb_genre_id)).first()
         if existing:
-            # [수정] 한글 에러 메시지
             raise ValueError(f"이미 존재하는 장르입니다. (TMDB ID: {genre_in.tmdb_genre_id})")
 
     genre.name = genre_in.name
