@@ -225,16 +225,16 @@ def create_reviews_and_bookmarks(db: Session):
 
 
 def main():
-    print("🌱 Initialize DB Session...")
+    print(" Initialize DB Session...")
     with Session(engine) as session:
-        print("🛠️ Creating tables manually...")
+        print(" Creating tables manually...")
         SQLModel.metadata.create_all(session.bind)
-        print("✅ Tables created!")
+        print(" Tables created!")
         create_users(session)
         create_genres(session)
         create_contents(session)
         create_reviews_and_bookmarks(session)
-    print("✨ Seed data created successfully! (~200+ items)")
+    print(" Seed data created successfully! (~200+ items)")
 
 
 if __name__ == "__main__":
