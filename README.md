@@ -66,7 +66,7 @@ pip install -r requirements.txt
 docker-compose up -d db redis 
 
 # 4. 서버 실행
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 ```
 ---
 ## 3. 환경변수 설명 (.env)

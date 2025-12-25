@@ -25,7 +25,7 @@ from src.schemas.auth import (
 # Firebase 초기화 (생략 가능하나 기존 코드 유지)
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate("app/core/firebase_key.json")
+        cred = credentials.Certificate("src/core/firebase_key.json")
         firebase_admin.initialize_app(cred)
     except Exception as e:
         print(f"Firebase Init Failed: {e}")
