@@ -117,11 +117,13 @@ class Review(SQLModel, table=True):
     rating: int = Field(ge=1, le=5)
     comment: str
 
+    like_count: int = Field(default=0)
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     user: User = Relationship(back_populates="reviews")
-    content: Content = Relationship(back_populates="reviews")
+    content: Content = Relationship(back_populates="reviews")   
     likes: List["ReviewLike"] = Relationship(back_populates="review")
 
 
