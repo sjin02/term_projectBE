@@ -2,7 +2,8 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-import models, schemas
+import app.db.models as models
+import app.schemas as schemas
 
 # 리뷰 생성
 def create_review(db: Session, content_id: int, user_id: int, review_in: schemas.ReviewCreate) -> models.Review:

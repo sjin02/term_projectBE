@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from sqlmodel import Session, select, SQLModel
 
 # 앱 설정 및 모델 임포트
-from app.db.session import engine
+from app.deps.db import engine
 from app.db.models import (
     User, UserRole, UserStatus,
     Genre, Content, ContentGenreLink,

@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-import models
+import app.db.models as models
 
 # 찜하기 추가
 def create_bookmark(db: Session, user_id: int, content_id: int) -> None:
