@@ -21,4 +21,6 @@ class GenreListResponse(BaseModel):
 class GenreCreate(BaseModel):
     name: str
     tmdb_genre_id: int
-
+class GenreUpdate(BaseModel):
+    name: str
+    tmdb_genre_id: int
