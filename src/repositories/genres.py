@@ -1,20 +1,72 @@
 from datetime import datetime
-from typing import Iterable, List, Sequence
-from pydantic import BaseModel
+from typing import Iterable, List, Sequence, Optional
 from sqlmodel import Session, select
 
 from src.db.models import Genre
+from src.schemas.genres import GenreCreate, GenreUpdate
 
+# 단일 장르 조회
+def get_genre(db: Session, genre_id: int) -> Optional[Genre]:
+    return db.get(Genre, genre_id)
+
+# 장르 생성
+def create_genre(db: Session, genre_in: GenreCreate) -> Genre:
+    # 중복 체크
+    existing = db.exec(select(Genre).where(Genre.tmdb_genre_id == genre_in.tmdb_genre_id)).first()
+    if existing:
+        # [수정] 한글 에러 메시지
+        raise ValueError(f"이미 존재하는 장르입니다. (TMDB ID: {genre_in.tmdb_genre_id})")
+
+    genre = Genre(
+        name=genre_in.name,
+        tmdb_genre_id=genre_in.tmdb_genre_id,
+        created_at=datetime.utcnow()
+    )
+    db.add(genre)
+    db.commit()
+    db.refresh(genre)
+    return genre
+
+# 장르 수정
+def update_genre(db: Session, genre_id: int, genre_in: GenreUpdate) -> Genre:
+    genre = get_genre(db, genre_id)
+    if not genre:
+        # [수정] 한글 에러 메시지
+        raise ValueError("해당 장르를 찾을 수 없습니다.")
+    
+    # TMDB ID 변경 시 중복 체크
+    if genre.tmdb_genre_id != genre_in.tmdb_genre_id:
+        existing = db.exec(select(Genre).where(Genre.tmdb_genre_id == genre_in.tmdb_genre_id)).first()
+        if existing:
+            # [수정] 한글 에러 메시지
+            raise ValueError(f"이미 존재하는 장르입니다. (TMDB ID: {genre_in.tmdb_genre_id})")
+
+    genre.name = genre_in.name
+    genre.tmdb_genre_id = genre_in.tmdb_genre_id
+    
+    db.add(genre)
+    db.commit()
+    db.refresh(genre)
+    return genre
+
+# 장르 삭제 (Soft Delete)
+def delete_genre(db: Session, genre_id: int) -> None:
+    genre = get_genre(db, genre_id)
+    if genre:
+        genre.deleted_at = datetime.utcnow()
+        db.add(genre)
+        db.commit()
+
+# ==========================================
+# 기존 함수들 (TMDB 동기화 등)
+# ==========================================
 
 def upsert_genres_from_tmdb(
     db: Session, tmdb_genres: Iterable[dict]
 ) -> List[Genre]:
-    """
-    Ensure every TMDB genre exists in the DB.
-    Returns the active Genre rows corresponding to the provided TMDB genres.
-    """
     tmdb_genres = list(tmdb_genres)
     tmdb_ids = [g["id"] for g in tmdb_genres]
+    
     current = {
         g.tmdb_genre_id: g
         for g in db.exec(select(Genre).where(Genre.tmdb_genre_id.in_(tmdb_ids))).all()
@@ -42,7 +94,6 @@ def upsert_genres_from_tmdb(
 
 
 def soft_delete_missing(db: Session, tmdb_ids: Sequence[int]) -> None:
-    """Mark genres missing from TMDB list as deleted."""
     now = datetime.utcnow()
     if not tmdb_ids:
         stale = db.exec(select(Genre).where(Genre.deleted_at.is_(None))).all()
