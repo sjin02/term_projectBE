@@ -10,12 +10,9 @@ FastAPI + SQLModel (PostgreSQL) + Redis
 
 ```text
        [ Client ]
-(Web / Mobile / Postman)
+(Web / Swagger / Postman)
           │
           │ HTTP (REST API)
-          ▼
-    [ Nginx / LB ] (Optional)
-          │
           ▼
 +-------------------------------------------------------+
 |                 FastAPI Application                   |
@@ -24,7 +21,7 @@ FastAPI + SQLModel (PostgreSQL) + Redis
 |      (CORS, Logging, RateLimit/SlowAPI)               |
 |          │                                            |
 |   2. Presentation Layer (Router)                      |
-|      (Auth, Users, Contents, Reviews Route)           |
+|      (Auth, Users, Contents, Reviews Route 등)        |
 |      (Request/Response Validation via Pydantic)       |
 |          │                                            |
 |   3. Business Layer (Services / Core)                 |

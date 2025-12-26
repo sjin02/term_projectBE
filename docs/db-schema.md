@@ -17,3 +17,78 @@
 - **review_likes**: 리뷰에 대한 '좋아요' 정보를 저장하는 테이블로, (사용자 ID, 리뷰 ID) 조합은 유니크합니다.
 - **bookmarks**: 사용자가 찜한 콘텐츠 정보를 저장합니다.
 
+## DB 다이어그램
+```mermaid
+erDiagram
+
+    USERS {
+        int id PK
+        string email
+        string password_hash
+        string nickname
+        string role
+        string status
+        datetime created_at
+        datetime updated_at
+        datetime deleted_at
+    }
+
+    CONTENTS {
+        int id PK
+        int tmdb_id
+        string title
+        date release_date
+        int runtime_minutes
+        datetime created_at
+        datetime updated_at
+        datetime deleted_at
+    }
+
+    GENRES {
+        int id PK
+        int tmdb_genre_id
+        string name
+        datetime created_at
+        datetime deleted_at
+    }
+
+    CONTENT_GENRES {
+        int content_id PK, FK
+        int genre_id PK, FK
+    }
+
+    REVIEWS {
+        int id PK
+        int user_id FK
+        int content_id FK
+        int rating
+        string comment
+        int like_count
+        datetime created_at
+        datetime updated_at
+    }
+
+    REVIEW_LIKES {
+        int user_id PK, FK
+        int review_id PK, FK
+        datetime created_at
+    }
+
+    BOOKMARKS {
+        int user_id PK, FK
+        int content_id PK, FK
+        datetime created_at
+    }
+
+    USERS ||--o{ REVIEWS : writes
+    USERS ||--o{ BOOKMARKS : bookmarks
+    USERS ||--o{ REVIEW_LIKES : likes
+
+    CONTENTS ||--o{ REVIEWS : has
+    CONTENTS ||--o{ BOOKMARKS : bookmarked_by
+    CONTENTS ||--o{ CONTENT_GENRES : categorized_as
+
+    GENRES ||--o{ CONTENT_GENRES : includes
+
+    REVIEWS ||--o{ REVIEW_LIKES : liked_by
+```

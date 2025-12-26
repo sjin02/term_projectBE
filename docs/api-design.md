@@ -10,31 +10,49 @@
 - 관리자(`/admin`) 및 장르 관리(`/genres`)를 통해 플랫폼의 메타데이터와 사용자를 관리합니다.
 - 운영 안정성을 위해 `/health` 체크와 **Rate Limit**(SlowAPI)이 적용되어 있습니다.
 
-## 주요 엔드포인트 요약
+## 엔드포인트 요약
 
-| 영역 | 메서드 & 경로 | 설명 | 권한 |
-| :--- | :--- | :--- | :--- |
-| **인증** | `POST /auth/login` | 이메일/비밀번호 로그인 (JWT 발급) | ALL |
-| | `POST /auth/refresh` | Access Token 만료 시 재발급 | ALL |
-| | `POST /auth/social`, `/auth/google` | 소셜(Firebase/Google) 로그인 | ALL |
-| | `POST /auth/logout` | 로그아웃 (Refresh Token 폐기) | USER+ |
-| **사용자** | `POST /users/signup` | 이메일 회원가입 | ALL |
-| | `GET /users/me` | 내 프로필 정보 조회 | USER+ |
-| | `PUT /users/me`, `PATCH /users/me/password` | 프로필 수정 및 비밀번호 변경 | USER+ |
-| | `DELETE /users/me` | 회원 탈퇴 (Soft Delete) | USER+ |
-| **개인화** | `GET /users/me/reviews` | 내가 작성한 리뷰 목록 조회 | USER+ |
-| | `GET /users/me/bookmarks` | 내 북마크 목록 조회 | USER+ |
-| **콘텐츠** | `GET /contents` | 영화 목록 조회 (검색, 정렬, 필터) | ALL |
-| | `GET /contents/{id}` | 영화 상세 정보 조회 (TMDB 연동) | ALL |
-| | `GET /contents/top-rated` | 평점 높은 영화 목록 조회 | ALL |
-| | `POST /contents`, `DELETE /contents/{id}` | 콘텐츠 수동 생성(복구) 및 삭제 | ADMIN |
-| **리뷰** | `GET /contents/{id}/reviews` | 특정 콘텐츠의 리뷰 목록 조회 | ALL |
-| | `POST /contents/{id}/reviews` | 리뷰 작성 | USER+ |
-| | `PUT /reviews/{id}`, `DELETE /reviews/{id}` | 리뷰 수정 및 삭제 | OWNER/ADMIN |
-| | `POST/DELETE /reviews/{id}/likes` | 리뷰 좋아요 추가 및 취소 | USER+ |
-| **북마크** | `POST /contents/{id}/bookmark` | 북마크 토글 (추가/취소) | USER+ |
-| **관리/기타** | `GET /genres`, `POST /genres` | 장르 목록 조회 및 추가 | ALL/ADMIN |
-| | `GET /health` | 서버 헬스 체크 | ALL |
+| 분류        | 메서드    | 엔드포인트 (URI)             | 설명 (기능)         | 인증 (Auth)      | Body / Query                   |
+| --------- | ------ | ----------------------- | --------------- | -------------- | ------------------------------ |
+| Auth      | POST   | /auth/login             | 로그인             | -              | email, password                |
+|           | POST   | /auth/logout            | 로그아웃            | Bearer         | -                              |
+|           | POST   | /auth/refresh           | 토큰 갱신           | Bearer         | refresh_token                  |
+|           | POST   | /auth/firebase          | Firebase 소셜 로그인 | -              | token                          |
+|           | POST   | /auth/google            | Google 소셜 로그인   | -              | token                          |
+| Users     | POST   | /users/signup           | 회원가입            | -              | email, password, nickname      |
+|           | GET    | /users/me               | 내 프로필 조회        | Bearer         | -                              |
+|           | PUT    | /users/me               | 내 프로필 수정        | Bearer         | nickname                       |
+|           | PATCH  | /users/me/password      | 비밀번호 변경         | Bearer         | current_password, new_password |
+|           | GET    | /users/me/reviews       | 내 리뷰 목록 조회      | Bearer         | -                              |
+|           | GET    | /users/me/bookmarks     | 내 북마크 목록 조회     | Bearer         | -                              |
+|           | DELETE | /users/me               | 회원 탈퇴           | Bearer         | -                              |
+| Contents  | GET    | /contents               | 콘텐츠 목록 조회       | Bearer         | Query: page, size              |
+|           | GET    | /contents/{id}          | 콘텐츠 상세 조회       | Bearer         | -                              |
+|           | GET    | /contents/top-rated     | 평점 높은 순 조회      | Bearer         | -                              |
+|           | POST   | /contents               | 콘텐츠 수동 등록       | Bearer (Admin) | tmdb_id                        |
+|           | DELETE | /contents/{id}          | 콘텐츠 삭제          | Bearer (Admin) | -                              |
+| Admin     | GET    | /users                  | 전체 회원 조회        | Bearer (Admin) | -                              |
+|           | GET    | /users/{id}             | 특정 회원 조회        | Bearer (Admin) | -                              |
+|           | PATCH  | /users/{id}/role        | 회원 권한 변경        | Bearer (Admin) | Query: role                    |
+|           | PATCH  | /users/{id}/status      | 회원 상태 변경        | Bearer (Admin) | Query: status                  |
+|           | DELETE | /users/{id}             | 회원 강제 탈퇴        | Bearer (Admin) | -                              |
+| Genres    | GET    | /genres                 | 장르 목록 조회        | -              | -                              |
+|           | POST   | /genres/sync            | 장르 데이터 동기화      | Bearer (Admin) | -                              |
+|           | POST   | /genres                 | 장르 생성           | Bearer (Admin) | name, tmdb_genre_id            |
+|           | PATCH  | /genres/{id}            | 장르 수정           | Bearer (Admin) | name, tmdb_genre_id            |
+|           | DELETE | /genres/{id}            | 장르 삭제           | Bearer (Admin) | -                              |
+| Reviews   | GET    | /contents/{id}/reviews  | 특정 콘텐츠 리뷰 조회    | -              | -                              |
+|           | POST   | /contents/{id}/reviews  | 리뷰 작성           | Bearer         | rating, comment                |
+|           | GET    | /reviews/popular        | 인기 리뷰 조회        | Bearer         | -                              |
+|           | PUT    | /reviews/{id}           | 리뷰 수정           | Bearer         | rating, comment                |
+|           | DELETE | /reviews/{id}           | 리뷰 삭제           | Bearer         | -                              |
+|           | POST   | /reviews/{id}/likes     | 리뷰 좋아요          | Bearer         | -                              |
+|           | DELETE | /reviews/{id}/likes     | 리뷰 좋아요 취소       | Bearer         | -                              |
+| Bookmarks | GET    | /bookmarks              | 북마크 목록 조회       | Bearer         | -                              |
+|           | POST   | /bookmarks              | 북마크 추가          | Bearer         | content_id                     |
+|           | DELETE | /bookmarks/{content_id} | 북마크 취소          | Bearer         | -                              |
+| System    | GET    | /health                 | 헬스 체크           | -              | -                              |
+
 
 ## 주요 설계 사항 및 특징
 
