@@ -122,7 +122,8 @@ Health Check: http://113.198.66.75:10093/health
 API 명세 확인 및 테스트를 위한 **Postman Collection**은 루트/postman 폴더에 있습니다.
 사전에 정의된 스크립트를 통해 인증 토큰 관리가 자동화되어 있어 편리하게 테스트할 수 있습니다.
 
-* 참고: 해당 링크로도 포스트맨을 확인할 수 있습니다. : [https://documenter.getpostman.com/view/48959495/2sBXVZpan3](https://documenter.getpostman.com/view/48959495/2sBXVZpan3)
+* 참고: 해당 링크로 포스트맨을 확인할 수 있습니다.(단, 스크립트, 환경변수 등 적용X) 
+  * [https://documenter.getpostman.com/view/48959495/2sBXVZpan3](https://documenter.getpostman.com/view/48959495/2sBXVZpan3)
 
 #### 테스트 진행 순서 (자동화 기능)
 이 컬렉션에는 **Pre-request Script**와 **Tests Script**가 적용되어 있습니다. 원활한 테스트를 위해 아래 순서를 권장합니다.
