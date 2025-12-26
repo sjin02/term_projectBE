@@ -34,4 +34,4 @@ dist/
 build/
 
 #Firebase 관리자 키
-app/core/firebase_key.json
+src/core/firebase_key.json
