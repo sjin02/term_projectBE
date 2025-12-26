@@ -116,6 +116,19 @@ Swagger UI (API 문서): http://113.198.66.75:10093/docs
 
 Health Check: http://113.198.66.75:10093/health
 
+
+### 4.1 Postman 설정 및 API 테스트 방법
+
+API 명세 확인 및 테스트를 위한 **Postman Collection**은 루트/postman 폴더에 있습니다.
+사전에 정의된 스크립트를 통해 인증 토큰 관리가 자동화되어 있어 편리하게 테스트할 수 있습니다.
+
+#### 테스트 진행 순서 (자동화 기능)
+이 컬렉션에는 **Pre-request Script**와 **Tests Script**가 적용되어 있습니다. 원활한 테스트를 위해 아래 순서를 권장합니다.
+
+**로그인 (`Auth > 로그인`) 실행**
+  * **기능**: 로그인 요청이 성공하면, 응답받은 `access_token`을 환경 변수에 **자동으로 저장**합니다.
+  * 이후 인증이 필요한 모든 API 요청(`Bearer Token`)에 이 토큰이 자동으로 적용됩니다.
+
 ---
 ## 5. 인증 플로우
 1. 로그인: POST /auth/login 요청 시 access_token(30분)과 refresh_token(7일) 발급.
