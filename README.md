@@ -103,6 +103,8 @@ pytest -vv
 | BUILD_TIME        | 시간      | `2025-12-20`                           |
 | TMDB_API_KEY     | TMDB API 발급 키    | `d1c4...`                                      |
 | GOOGLE_CLIENT_ID | 구글 로그인 클라이언트 ID  | `...apps.googleusercontent.com`                |
+| POSTGRES_PASSWORD | Postgres_비밀번호  | `비번`                |
+
 
 ---
 ## 4. 배포 주소
