@@ -26,9 +26,9 @@
 |           | GET    | /users/me/reviews       | 내 리뷰 목록 조회      | Bearer         | -                              |
 |           | GET    | /users/me/bookmarks     | 내 북마크 목록 조회     | Bearer         | -                              |
 |           | DELETE | /users/me               | 회원 탈퇴           | Bearer         | -                              |
-| Contents  | GET    | /contents               | 콘텐츠 목록 조회       | Bearer         | Query: page, size              |
-|           | GET    | /contents/{id}          | 콘텐츠 상세 조회       | Bearer         | -                              |
-|           | GET    | /contents/top-rated     | 평점 높은 순 조회      | Bearer         | -                              |
+| Contents  | GET    | /contents               | 콘텐츠 목록 조회       | -         | Query: page, size              |
+|           | GET    | /contents/{id}          | 콘텐츠 상세 조회       | -         | -                              |
+|           | GET    | /contents/top-rated     | 평점 높은 순 조회      | -         | -                              |
 |           | POST   | /contents               | 콘텐츠 수동 등록       | Bearer (Admin) | tmdb_id                        |
 |           | DELETE | /contents/{id}          | 콘텐츠 삭제          | Bearer (Admin) | -                              |
 | Admin     | GET    | /users                  | 전체 회원 조회        | Bearer (Admin) | -                              |
@@ -43,7 +43,7 @@
 |           | DELETE | /genres/{id}            | 장르 삭제           | Bearer (Admin) | -                              |
 | Reviews   | GET    | /contents/{id}/reviews  | 특정 콘텐츠 리뷰 조회    | -              | -                              |
 |           | POST   | /contents/{id}/reviews  | 리뷰 작성           | Bearer         | rating, comment                |
-|           | GET    | /reviews/popular        | 인기 리뷰 조회        | Bearer         | -                              |
+|           | GET    | /reviews/popular        | 인기 리뷰 조회        | -         | -                              |
 |           | PUT    | /reviews/{id}           | 리뷰 수정           | Bearer         | rating, comment                |
 |           | DELETE | /reviews/{id}           | 리뷰 삭제           | Bearer         | -                              |
 |           | POST   | /reviews/{id}/likes     | 리뷰 좋아요          | Bearer         | -                              |
