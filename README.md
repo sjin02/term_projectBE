@@ -3,6 +3,9 @@
 이 프로젝트는 TMDB API를 활용한 영화/TV 시리즈 정보 제공, 리뷰 작성, 북마크 관리 기능을 제공하는 RESTful API 서버입니다.
 <br>
 FastAPI를 기반으로 구축되었으며, JWT 인증, RBAC 권한 관리, Redis 캐싱, Docker 컨테이너 배포 환경을 포함하고 있습니다.
+<br>
+
+* 프론트엔드 레포지토리 주소 : https://github.com/gajaeup/term_projectFE
 ---
 
 ## Tech Stack
@@ -116,6 +119,8 @@ Swagger UI (API 문서): http://113.198.66.75:10093/docs
 
 Health Check: http://113.198.66.75:10093/health
 
+Front-end: http://113.198.66.75:13093 
+  * [프론트엔드 레포지토리 주소](https://github.com/gajaeup/term_projectFE)에서 로컬 클론하여 확인하셔도 됩니다.
 
 ### 4.1 Postman 설정 및 API 테스트 방법
 
@@ -138,7 +143,11 @@ API 명세 확인 및 테스트를 위한 **Postman Collection**은 루트/postm
 2. 토큰 검증: Redis 화이트리스트 전략을 사용하여 refresh_token의 유효성을 서버 측에서 2중 검증.
 3. 갱신: Access Token 만료 시 POST /auth/refresh로 재발급 요청 (Body에 Refresh Token 포함).
 4. 로그아웃: Redis에서 해당 유저의 Refresh Token을 삭제하여 즉시 무효화.
+<br>
 
+* 기본 로그인은 비밀번호를 bycrypt로 저장합니다.
+* firebase 로그인은 이메일, 깃허브, 구글을 지원합니다.
+* 구글 Oauth 2.0 로그인이 가능합니다.
 ---
 ## 6. 역할 및 권한 (RBAC)
 
@@ -157,11 +166,11 @@ API 명세 확인 및 테스트를 위한 **Postman Collection**은 루트/postm
 ---
 ## 7. 예제 계정 (Seed Data)
 
-| 역할      | 이메일                                           | 비밀번호 | 비고            |
-| ------- | --------------------------------------------- | ---- | ------------- |
-| 관리자     | [admin@example.com](mailto:admin@example.com) | 1234 | 모든 API 접근 가능  |
-| 일반 유저 1 | [user1@example.com](mailto:user1@example.com) | 1234 | 리뷰 / 북마크 테스트용 |
-| 일반 유저 2 | [user2@example.com](mailto:user2@example.com) | 1234 | 좋아요 테스트용      |
+| 역할      | 이메일                                           | 비밀번호 |
+| ------- | --------------------------------------------- | ---- | 
+| 관리자     | [admin@example.com](mailto:admin@example.com) | 1234 | 
+| 일반 유저 1 | [user1@example.com](mailto:user1@example.com) | 1234 | 
+| 일반 유저 2 | [user2@example.com](mailto:user2@example.com) | 1234 | 
 
 
 ---
