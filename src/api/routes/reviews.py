@@ -300,9 +300,15 @@ def delete_review(
     # 관리자 또는 본인
     if review.user_id != user.id and user.role != "ADMIN":
         raise http_error(403, ErrorCode.FORBIDDEN, "자신이 작성한 리뷰만 삭제할 수 있습니다.")
-
-    db.delete(review)
-    db.commit()
+    try:
+        likes = db.exec(select(ReviewLike).where(ReviewLike.review_id == review_id)).all()
+        for like in likes:
+            db.delete(like)
+        db.delete(review)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise http_error(500, ErrorCode.INTERNAL_SERVER_ERROR, "리뷰 삭제 중 오류가 발생했습니다.")
     return success_response(
         request,
         message="리뷰가 삭제되었습니다.",
