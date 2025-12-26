@@ -177,7 +177,7 @@ def google_login(request: Request, body: GoogleRequest, db: Session = Depends(ge
         id_info = google_id_token.verify_oauth2_token(
             body.id_token, 
             google_requests.Request(), 
-            audience=[CLIENT_ID, PLAYGROUND_CLIENT_ID] 
+            audience=None
         )
         
         email = id_info['email']
