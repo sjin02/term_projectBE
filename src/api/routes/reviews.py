@@ -390,10 +390,14 @@ def unlike_review(
     db.delete(like)
     db.commit()
 
-    like_count = db.exec(
-        select(func.count(ReviewLike.id))
+    like_count = db.scalar(
+        select(func.count())
         .where(ReviewLike.review_id == review_id)
-    ).scalar_one()
+    )
+
+    if like_count is None:
+        like_count = 0
+
     return success_response(
         request,
         message="좋아요가 취소되었습니다.",
