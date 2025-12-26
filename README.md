@@ -122,6 +122,8 @@ Health Check: http://113.198.66.75:10093/health
 API 명세 확인 및 테스트를 위한 **Postman Collection**은 루트/postman 폴더에 있습니다.
 사전에 정의된 스크립트를 통해 인증 토큰 관리가 자동화되어 있어 편리하게 테스트할 수 있습니다.
 
+* 참고: 해당 링크로도 포스트맨을 확인할 수 있습니다. : [https://documenter.getpostman.com/view/48959495/2sBXVZpan3](https://documenter.getpostman.com/view/48959495/2sBXVZpan3)
+
 #### 테스트 진행 순서 (자동화 기능)
 이 컬렉션에는 **Pre-request Script**와 **Tests Script**가 적용되어 있습니다. 원활한 테스트를 위해 아래 순서를 권장합니다.
 
@@ -187,7 +189,7 @@ Docker Compose 환경 기준 정보입니다.
 | Admin     | /users                   | GET    | 전체 회원 목록 조회             |
 |           | /users/{id}/status       | PATCH  | 회원 상태 변경 (차단 / 복구)      |
 
-* 자세한 api는 postman 문서 혹은 swagger 문서를 확인하세요.
+* 자세한 api는 postman 문서 혹은 swagger 문서, 또는 docs/api-design.md를 확인하세요.
 ---
 
 ## 10. 성능 및 보안 고려사항
