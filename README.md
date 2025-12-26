@@ -95,7 +95,7 @@ pytest -vv
 
 | 변수명              | 설명               | 예시 값                                           |
 | ---------------- | ---------------- | ---------------------------------------------- |
-| DATABASE_URL     | PostgreSQL 연결 주소 | `postgresql://postgres:password@db:5432/movie` |
+| DATABASE_URL     | PostgreSQL 연결 주소 | `postgresql://사용자이름:비밀번호@호스트:포트/데이터베이스이름` |
 | JWT_SECRET       | 토큰 서명용 비밀키       | `your_secret_key`                              |
 | JWT_ALGORITHM    | 암호화 알고리즘         | `HS256`                                        |
 | REDIS_URL        | Redis 연결 주소      | `0.1.0`                           |
@@ -179,7 +179,7 @@ Docker Compose 환경 기준 정보입니다.
 
 ### 10.1 표준화된 에러 응답
 모든 API 예외 상황에 대해 통일된 JSON 포맷을 반환하여 클라이언트 처리를 용이하게 했습니다.
-
+* 예시: 
 ```JSON
 {
   "timestamp": "2025-12-25T12:00:00Z",
