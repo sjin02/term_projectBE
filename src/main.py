@@ -22,13 +22,6 @@ from src.core.errors import (
 limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 app = FastAPI(title="Movie API", version=settings.APP_VERSION)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 # 2. State에 limiter 저장 (라우터에서 사용 가능하도록)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
